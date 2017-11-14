@@ -1,0 +1,52 @@
+body { font: 12px Arial;
+    background-color:white;}
+
+path { 
+    stroke: rgba(50,50,50, 0.3);
+    stroke-width: 2;
+    fill: none;
+}
+.map{
+    stroke: rgba(50,50,50, 0.2);
+    stroke-width: 2;
+    fill: rgba(120,120,120, 0.2);   
+}
+#map-div{
+    display:inline-block;
+    border: 1px solid blue;
+    top:10px;
+    left:10px;
+     
+}
+
+#platoons{
+    display:inline-block;
+    border: 1px solid red;
+    top:10px;
+}
+.bar{
+    fill: blue;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+div.tooltip {
+  position: absolute;
+  text-align: left;
+  padding: 2px;
+  font: 12px sans-serif;
+  background: lightsteelblue;
+  border: 0px;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index:10;
+
+}

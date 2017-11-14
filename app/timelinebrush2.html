@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.area {
+  fill: steelblue;
+  clip-path: url(#clip);
+}
+
+.zoom {
+  cursor: move;
+  fill: none;
+  pointer-events: all;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+path { 
+    stroke: rgba(50,50,50, 0.1);
+    stroke-width: 2;
+    fill: none;
+}
+.mapOutline{
+    stroke: rgba(50,50,50, 0.2);
+    stroke-width: 2;
+    fill: rgba(120,120,120, 0.05);   
+}
+#map{
+    display: block;
+    float:left;
+    top:10px;
+    left:10px;
+    height:750px;
+    width:400px;
+     
+}
+ul{
+    float:left;
+    display: block;
+    height:750px; 
+    width:70px; 
+    overflow-y:scroll;
+    margin-top:0px;
+    margin-bottom:0px;
+}
+
+</style>
+<div id="firstPanel">
+    <div id="timeline">
+        <svg width="960" height="300" ></svg>
+    </div>
+</div>
+<div class="secondPanel">
+    <div>
+        <ul id="brushedTrucksList" ></ul>
+    </div>
+
+    <div id="map" >
+    </div>
+
+</div>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script>
+
+var activeTrucks = [];
+var maxTime =0;
+var brushedTrucks =[];
+var selectedTrucks = [];
+var mapCoords = [];
+
+var svg = d3.select("svg"),
+    margin = {top: 20, right: 20, bottom: 110, left: 40},
+    margin2 = {top: 230, right: 20, bottom: 30, left: 40},
+    width = +svg.attr("width") - margin.left - margin.right,
+    height = +svg.attr("height") - margin.top - margin.bottom,
+    height2 = +svg.attr("height") - margin2.top - margin2.bottom;
+
+//var parseDate = d3.timeParse("%b %Y");
+
+var x = d3.scaleLinear().range([0, width]),
+    x2 = d3.scaleLinear().range([0, width]),
+    y = d3.scaleLinear().range([height, 0]),
+    y2 = d3.scaleLinear().range([height2, 0]);
+
+var xAxis = d3.axisBottom(x),
+    xAxis2 = d3.axisBottom(x2),
+    yAxis = d3.axisLeft(y);
+
+var brush = d3.brushX()
+    .extent([[0, 0], [width, height2]])
+    .on("brush end", brushed);
+
+var zoom = d3.zoom()
+    .scaleExtent([1, Infinity])
+    .translateExtent([[0, 0], [width, height]])
+    .extent([[0, 0], [width, height]])
+    .on("zoom", zoomed);
+
+var area = d3.area()
+    .curve(d3.curveMonotoneX)
+    .x(function(d) { return x(d.time); })
+    .y0(height)
+    .y1(function(d) { return y(d.total); });
+
+var area2 = d3.area()
+    .curve(d3.curveMonotoneX)
+    .x(function(d) { return x2(d.time); })
+    .y0(height2)
+    .y1(function(d) { return y2(d.total); });
+
+svg.append("defs").append("clipPath")
+    .attr("id", "clip")
+  .append("rect")
+    .attr("width", width)
+    .attr("height", height);
+
+var focus = svg.append("g")
+    .attr("class", "focus")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var context = svg.append("g")
+    .attr("class", "context")
+    .attr("transform", "translate(" + margin2.left + "," + margin2.top + ")");
+
+
+d3.json("outputTruncatedRoutes.json", function(error, data1) {
+    if (error) throw error;
+    
+    // Load the map of sweden and draw it 
+    d3.json("svarje.json", function(error, data2){
+        if (error) throw error;
+        data2.coordinates.forEach(function(d){
+            d.long = +d.long;
+            d.lat = +d.lat;
+        });
+        
+        mapCoords = data2;
+        
+        data1.trucks.forEach(function(d1){
+            d1.route.forEach(function(d) {
+                d.long = +d.long/1000000;
+                d.lat = +d.lat/1000000;
+            });
+            d1.id = +d1.id;
+            d1.start_time = +d1.start_time;
+            d1.end_time = +d1.end_time;
+            d1.deadline = +d1.deadline;
+        });
+        
+        maxTime = d3.max(data1.trucks, function(d){return d.deadline});
+        steps = maxTime/600;
+
+        for(i=0;i<=steps;i++){
+            //sum up how many trucks are active at all times
+            var tick ={};
+            tick.time = i*600;
+            tick.total = 0;
+            tick.trucksAtTimestep= [];
+            for(var t=0;t< data1.trucks.length; t++){
+                if(tick.time <= data1.trucks[t].deadline && data1.trucks[t].start_time <= tick.time){
+                    tick.total ++;
+                    //lägg in lista med referenser istället.
+                    tick.trucksAtTimestep.push(data1.trucks[t]);
+                }
+            }
+            activeTrucks.push(tick);
+        }
+        activeTrucks.push({"time": steps*600, "total": 0});
+        
+        var data = activeTrucks;
+
+        x.domain(d3.extent(data, function(d) { return d.time; }));
+        y.domain([0, d3.max(data, function(d) { return d.total; })]);
+        x2.domain(x.domain());
+        y2.domain(y.domain());
+
+        focus.append("path")
+            .datum(data)
+            .attr("class", "area")
+            .attr("d", area);
+
+        focus.append("g")
+            .attr("class", "axis axis--x")
+            .attr("transform", "translate(0," + height + ")")
+            .call(xAxis);
+
+        focus.append("g")
+            .attr("class", "axis axis--y")
+            .call(yAxis);
+
+        context.append("path")
+            .datum(data)
+            .attr("class", "area")
+            .attr("d", area2);
+
+        context.append("g")
+            .attr("class", "axis axis--x")
+            .attr("transform", "translate(0," + height2 + ")")
+            .call(xAxis2);
+
+        context.append("g")
+            .attr("class", "brush")
+            .call(brush)
+            .call(brush.move, x.range());
+
+        svg.append("rect")
+            .attr("class", "zoom")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+            .call(zoom);
+      });
+});
+
+function updateMap(){
+    var margin3 = {top: 30, right: 20, bottom: 30, left: 50};
+    var width3 = 400 - margin3.left - margin3.right;
+    var height3 = 750 - margin3.top - margin3.bottom;
+
+
+    // Set the ranges
+    var x3 = d3.scaleLinear().range([0, width3]);  
+    var y3 = d3.scaleLinear().range([height3, 0]);
+
+    // Define the line
+    var pathline = d3.line()    
+        .x(function(d) { return x3(d.long); })
+        .y(function(d) { return y3(d.lat); });
+
+    var outline = d3.line()    
+        .x(function(d) { return x3(d.long); })
+        .y(function(d) { return y3(d.lat); })
+        .curve(d3.curveCardinal);
+        
+    var nukeFromOrbit = d3.select("#map");
+    nukeFromOrbit.html("");
+
+    // Adds the svg canvas
+    var mapView = d3.select("#map")
+        .append("svg")
+            .attr("width", width3 + margin3.left + margin3.right)
+            .attr("height", height3 + margin3.top + margin3.bottom)
+        .append("g")
+            .attr("transform", 
+                  "translate(" + margin3.left + "," + margin3.top + ")");
+
+    x3.domain(d3.extent(mapCoords.coordinates, function(d) { return d.long; }));
+    y3.domain(d3.extent(mapCoords.coordinates, function(d) { return d.lat; }));
+
+    mapView.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + height3 + ")")
+        .call(d3.axisBottom(x3));
+
+    // Add the Y Axis
+    mapView.append("g")
+        .attr("class", "axis")
+        .call(d3.axisLeft(y3));
+
+    mapView.append("path")
+        .attr("class", "line")
+        .attr("class", "mapOutline")
+        .attr("d", outline(mapCoords.coordinates));
+
+    brushedTrucks.forEach(function(d) { 
+        mapView.append("path")
+            .attr("class", "line")
+            .attr("class", "truckRoute")
+            .attr("d", pathline(d.route));
+    });
+};
+
+function updateVis(){
+    updateList();
+    updateMap();
+}
+
+function updateList(){
+    var truckList = d3.select("#brushedTrucksList");
+
+    //console.log(brushedTrucks);
+    brushedTrucks.sort((x,y) => x.id - y.id);
+    truckList.html("");
+    truckList.selectAll("li")
+        .data(brushedTrucks.map(t => t.id))
+        .enter()
+        .append("li")
+        .html(String);
+}
+
+function getBrushedTrucks(){
+    brushedTrucks =[];
+    selectedTrucks = [];
+    var truckIDs = {};
+
+    var left = parseInt((x.domain()[0]/maxTime)*activeTrucks.length);
+    var right = parseInt((x.domain()[1]/maxTime)*activeTrucks.length);
+
+    for(var i=left; i<right;i++){
+        selectedTrucks.push(activeTrucks[i]);
+    }
+    
+    for(var timeStepIndex in selectedTrucks){
+        var timeStep = selectedTrucks[timeStepIndex];
+
+        for(var truckIndex in timeStep.trucksAtTimestep){
+            var truck = timeStep.trucksAtTimestep[truckIndex];
+
+            if(typeof(truckIDs[truck.id]) === 'undefined'){
+                truckIDs[truck.id] = 0;
+                brushedTrucks.push(truck);
+            }
+        }
+    }
+    return brushedTrucks;
+}
+
+function brushed() {
+    if (d3.event.sourceEvent && d3.event.sourceEvent.type === "zoom") return; // ignore brush-by-zoom
+    var s = d3.event.selection || x2.range();
+    //console.log(s);
+    x.domain(s.map(x2.invert, x2));
+    focus.select(".area").attr("d", area);
+    focus.select(".axis--x").call(xAxis);
+    svg.select(".zoom").call(zoom.transform, d3.zoomIdentity
+        .scale(width / (s[1] - s[0]))
+        .translate(-s[0], 0));
+
+    brushedTrucks = getBrushedTrucks();
+    updateVis();
+    
+}
+
+function zoomed() {
+    if (d3.event.sourceEvent && d3.event.sourceEvent.type === "brush") return; // ignore zoom-by-brush
+    var t = d3.event.transform;
+    x.domain(t.rescaleX(x2).domain());
+    focus.select(".area").attr("d", area);
+    focus.select(".axis--x").call(xAxis);
+    context.select(".brush").call(brush.move, x.range().map(t.invertX, t));
+    //console.log(x.domain());
+
+    brushedTrucks = getBrushedTrucks();
+    updateVis();
+
+
+}
+
+      /*function type(d) {
+        d.date = parseDate(d.date);
+        d.price = +d.price;
+        return d;
+    }*/
+
+
+</script>
