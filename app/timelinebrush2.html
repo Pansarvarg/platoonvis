@@ -25,19 +25,22 @@ path {
     stroke: rgba(50,50,50, 0.1);
     stroke-width: 2;
     fill: none;
+    pointer-events: visibleStroke;
 }
 .mapOutline{
     stroke: rgba(50,50,50, 0.2);
     stroke-width: 2;
-    fill: rgba(120,120,120, 0.05);   
+    fill:none;
+    /*fill: rgba(120,120,120, 0.05);   */
 }
 #map{
     display: block;
     float:left;
     top:10px;
     left:10px;
-    height:750px;
-    width:400px;
+    height:700px;
+    width:700px;
+    border:1px solid blue;
      
 }
 ul{
@@ -73,6 +76,10 @@ var maxTime =0;
 var brushedTrucks =[];
 var selectedTrucks = [];
 var mapCoords = [];
+var currentMapTransform = -1;
+
+var platoons = [];
+var brushedPlatoons = [];
 
 var svg = d3.select("svg"),
     margin = {top: 20, right: 20, bottom: 110, left: 40},
@@ -129,11 +136,11 @@ var context = svg.append("g")
     .attr("transform", "translate(" + margin2.left + "," + margin2.top + ")");
 
 
-d3.json("outputTruncatedRoutes.json", function(error, data1) {
+d3.json("/data/outputTruncatedRoutes.json", function(error, data1) {
     if (error) throw error;
     
     // Load the map of sweden and draw it 
-    d3.json("svarje.json", function(error, data2){
+    d3.json("/data/svarje.json", function(error, data2){
         if (error) throw error;
         data2.coordinates.forEach(function(d){
             d.long = +d.long;
@@ -153,26 +160,10 @@ d3.json("outputTruncatedRoutes.json", function(error, data1) {
             d1.deadline = +d1.deadline;
         });
         
-        maxTime = d3.max(data1.trucks, function(d){return d.deadline});
-        steps = maxTime/600;
-
-        for(i=0;i<=steps;i++){
-            //sum up how many trucks are active at all times
-            var tick ={};
-            tick.time = i*600;
-            tick.total = 0;
-            tick.trucksAtTimestep= [];
-            for(var t=0;t< data1.trucks.length; t++){
-                if(tick.time <= data1.trucks[t].deadline && data1.trucks[t].start_time <= tick.time){
-                    tick.total ++;
-                    //lägg in lista med referenser istället.
-                    tick.trucksAtTimestep.push(data1.trucks[t]);
-                }
-            }
-            activeTrucks.push(tick);
-        }
-        activeTrucks.push({"time": steps*600, "total": 0});
         
+        calculateActiveTrucks(data1);
+        calculatePlatoons(data1);
+
         var data = activeTrucks;
 
         x.domain(d3.extent(data, function(d) { return d.time; }));
@@ -220,8 +211,8 @@ d3.json("outputTruncatedRoutes.json", function(error, data1) {
 
 function updateMap(){
     var margin3 = {top: 30, right: 20, bottom: 30, left: 50};
-    var width3 = 400 - margin3.left - margin3.right;
-    var height3 = 750 - margin3.top - margin3.bottom;
+    var width3 = 700 - margin3.left - margin3.right;
+    var height3 = 700 - margin3.top - margin3.bottom;
 
 
     // Set the ranges
@@ -237,6 +228,10 @@ function updateMap(){
         .x(function(d) { return x3(d.long); })
         .y(function(d) { return y3(d.lat); })
         .curve(d3.curveCardinal);
+
+    var zoom = d3.zoom()
+            .scaleExtent([1, 8])
+            .on("zoom", mapZoomed);
         
     var nukeFromOrbit = d3.select("#map");
     nukeFromOrbit.html("");
@@ -248,12 +243,32 @@ function updateMap(){
             .attr("height", height3 + margin3.top + margin3.bottom)
         .append("g")
             .attr("transform", 
-                  "translate(" + margin3.left + "," + margin3.top + ")");
+                  "translate(" + margin3.left + "," + margin3.top + ")")
+            .call(zoom);
 
-    x3.domain(d3.extent(mapCoords.coordinates, function(d) { return d.long; }));
+
+    var rect = mapView.append("rect")
+        .attr("width", width3)
+        .attr("height", height3)
+        .attr("class", ".mapZoomRect")
+        .attr("transform", 
+                  "translate(" + margin3.left + ")")
+        .style("fill", "none")
+        .style("pointer-events", "all");
+        /*.call(d3.zoom()
+            .scaleExtent([1, 8])
+            .on("zoom", mapZoomed));*/
+
+    //x3.domain(d3.extent(mapCoords.coordinates, function(d) { return d.long; }));
+    //manually sets the x domain in order to have good aspect ratio even thoguh the data is scewed
+    x3.domain([9, 30]);
     y3.domain(d3.extent(mapCoords.coordinates, function(d) { return d.lat; }));
 
-    mapView.append("g")
+
+
+    
+
+    /*mapView.append("g")
         .attr("class", "axis")
         .attr("transform", "translate(0," + height3 + ")")
         .call(d3.axisBottom(x3));
@@ -262,23 +277,123 @@ function updateMap(){
     mapView.append("g")
         .attr("class", "axis")
         .call(d3.axisLeft(y3));
+*/
 
-    mapView.append("path")
+    /*mapView.style("pointer-events", "all")
+        .call(d3.zoom()
+            .scaleExtent([1, 8])
+            .on("zoom", mapZoomed));*/
+    var container = mapView.append("g");
+    var paths = container.append("g")
+        .attr("class", ".mapViewGroup");
+
+    paths.append("path")
         .attr("class", "line")
         .attr("class", "mapOutline")
         .attr("d", outline(mapCoords.coordinates));
 
     brushedTrucks.forEach(function(d) { 
-        mapView.append("path")
+        did = "#"+d.id;
+        paths.append("path")
             .attr("class", "line")
+            .attr("id", did)
             .attr("class", "truckRoute")
-            .attr("d", pathline(d.route));
+            .attr("d", pathline(d.route))
+            .on("mouseover",function(d,i){
+              console.log("hello")
+                d3.select(this)
+                    .style("stroke","red")
+                    .style("z-index", "10");//it is style 
+           })
+            .on("mouseout",function(d,i){
+                d3.select(this)
+                    .transition()
+                    .duration(500)
+                    .style("stroke","rgba(50,50,0, 0.2)");//it is style 
+            });;
+
+            
     });
+    
+    
+
+
+    //TODO Fix zoom behaviour to stop setting pos by brushing. very annoying
+    function mapZoomed() {
+        //console.log(currentMapTransform);
+        //console.log(d3.event.transform);
+        if(typeof(d3.event.transform) != 'undefined'){
+            currentMapTransform = d3.event.transform;
+        }
+        paths.attr("transform", currentMapTransform);
+        //paths.attr("transform", d3.event.transform);
+    }
+
+    //if map is redrawn from brushing call mapzoomed to resume same transform
+    if(currentMapTransform != -1 ){
+        mapZoomed();   
+    }
+    /*if(typeof(d3.event.transform) != 'undefined'){
+        currentMapTransform = d3.event.transform;
+    }*/
 };
 
 function updateVis(){
     updateList();
     updateMap();
+}
+
+function calculateActiveTrucks(data1){
+    var stepLength = 600;
+    
+    maxTime = d3.max(data1.trucks, function(d){return d.deadline});
+    steps = maxTime/stepLength;
+
+    //sum up how many trucks are active at all times
+    //ACTIVE TRUCKS contains the total amount and references to all trucks active att all time steps. 
+    for(i=0;i<=steps;i++){
+        var tick ={};
+        tick.time = i*stepLength;
+        tick.total = 0;
+        tick.trucksAtTimestep= [];
+        for(var t=0;t< data1.trucks.length; t++){
+            if(tick.time <= data1.trucks[t].deadline && data1.trucks[t].start_time <= tick.time){
+                tick.total ++;
+                //lägg in lista med referenser istället.
+                tick.trucksAtTimestep.push(data1.trucks[t]);
+            }
+        }
+        activeTrucks.push(tick);
+    }
+    activeTrucks.push({"time": steps*stepLength, "total": 0});
+}
+
+function calculatePlatoons(data){
+    for(var truckIndex in data.trucks){
+        truck = data.trucks[truckIndex];
+        var platoon = {};
+        var trucksInPlatoon = [];
+
+        for(var phIndex in truck.plan_history){
+            var plan = truck.plan_history[phIndex];
+            //console.log(plan.plan_type);
+            if(plan.plan[0].plan_type == "Adapted_plan"){
+                /*console.log(truck.id);
+                console.log(plan.plan[0].leader);
+                console.log(plan.start_time);
+                console.log(plan.end_time);*/
+
+                trucksInPlatoon.push(truck);
+                for(var l in data.trucks){
+                    if(data.trucks[l].id == plan.plan[0].leader)
+                    trucksInPlatoon.push(data.trucks[l]);
+                }
+
+            }
+            
+        }
+       // console.log(trucksInPlatoon);
+    }
 }
 
 function updateList(){
