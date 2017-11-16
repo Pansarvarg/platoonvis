@@ -479,13 +479,11 @@ function calculateActiveTrucks(){
 function calculatePlatoons(){
     
     //system for finding trucks that do not have an adaptde plann, but still platooned.
-    allTrucks = [];
     adaptedPlanTrucks = [];
     platooningTrucks = [];
 
     for(var truckIndex in truckData.trucks){
-        truck = truckData.trucks[truckIndex];
-        allTrucks.push(truck.id);
+        var truck = truckData.trucks[truckIndex];
 
         if(truck.plan_history.length >1){
             var platoon = {};
@@ -494,11 +492,11 @@ function calculatePlatoons(){
             for(var pIndex in truck.plan_history){
                 var truckPlan = truck.plan_history[pIndex];
                 if(truckPlan.plan[0].plan_type == "Adapted_plan"){
-                    if(typeof(platoon[truck.id]) === 'undefined'){
+                    /*if(typeof(platoon[truck.id]) === 'undefined'){
                         platoon[truck.id] = 0;
                         thisTruckPlatoonedWith.push(truck);
                         adaptedPlanTrucks.push(truck.id);
-                    }
+                    }*/
                     for(var lead in truckData.trucks){
                         if(truckData.trucks[lead].id == truckPlan.plan[0].leader && typeof(platoon[truckData.trucks[lead].id]) === 'undefined'){
                             platoon[truckData.trucks[lead].id] = 0;
@@ -515,46 +513,95 @@ function calculatePlatoons(){
                                     idsInPlatoonedwith.push(truckData.trucks[lead].platoonedWith[plw].id);
                                 }
                                 if(!idsInPlatoonedwith.includes(truck.id)){
-                                    console.log(truck.id);
-                                    console.log(idsInPlatoonedwith);
-                                    
+                                   
                                     truckData.trucks[lead].platoonedWith.push(truck);        
                                 }   
                             //console.log(truckData.trucks[lead].platoonedWith);
                             }
-
                         }
                     }
-
-                }
-                
+                }   
             }
-            console.log(thisTruckPlatoonedWith);
             truckData.trucks[truckIndex].platoonedWith = thisTruckPlatoonedWith;
         }
     }
 
+    //finds ids of trucks that have no adapted plans but still platoon, yay.
     var defaultPlanPlatooners =[];
 
+    //finds all trucks that has platooned but does not have an adapted plan and adds it's id to the array
     for(var i in platooningTrucks){
         if(!adaptedPlanTrucks.includes(platooningTrucks[i])){
             defaultPlanPlatooners.push(platooningTrucks[i]);
-
         }
     }
-
+    //goes through the array of non-adaptedplan trucks and adds the whole object to array
     for(var t in truckData.trucks){
         if(defaultPlanPlatooners.includes(truckData.trucks[t].id)){
-            console.log(truckData.trucks[t]);
+            //console.log(truckData.trucks[t]);
             defaultPlanPlatooningTrucks.push(truckData.trucks[t]);
         }
     }
-    //console.log(truckData.trucks);
-    //console.log(defaultPlanPlatooners);
 
 
+    //find out when which truck has platooned with which.
+
+    //loop through all trucks
+    //find the adapted plans that corresponds to the event, string together timeline for each platoon
+    //format in a sensical manner to browse platoons.
+    for(var truckIndex in truckData.trucks){
+        var truck = truckData.trucks[truckIndex];
+        if(typeof(truck.platoonedWith) != 'undefined'){
+            
+            var platooningInstances = [];
+
+            for(var pp in truck.platoonedWith){
+                var platooningPartner = truck.platoonedWith[pp];
+                //find plan with reference to this truck, could be this truck that follows as well. 
+                //point is it doesn't matter who is leader that much
+                for(var p in truck.plan_history){
+                    var adaptedPlan = truck.plan_history[p];
+                        
+                    if(adaptedPlan.plan[0].plan_type == "Adapted_plan"){
+                        
+                        if(adaptedPlan.plan[0].leader == platooningPartner.id){
+                            var platooningInstance = {};
+                            platooningInstance.leader = platooningPartner;
+                            platooningInstance.start_time = adaptedPlan.start_time;
+                            platooningInstance.end_time = adaptedPlan.end_time;
+                            platooningInstance.plan = adaptedPlan.plan[0];
+                            platooningInstance.addedFrom = "self";
+                        
+                            platooningInstances.push(platooningInstance);
+                        }
+                    }
+                }
+                for(var adp in platooningPartner.plan_history){
+                    var ppAdp = platooningPartner.plan_history[adp];
+                    if(ppAdp.plan[0].plan_type == 'Adapted_plan'){
+                        
+                        if(ppAdp.plan[0].leader == truck.id){
+
+                            var partnerPlatooningInstance = {};
+                            partnerPlatooningInstance.leader = truck;
+                            partnerPlatooningInstance.start_time = ppAdp.start_time;
+                            partnerPlatooningInstance.end_time = ppAdp.end_time;
+                            partnerPlatooningInstance.plan = ppAdp.plan[0];
+                            partnerPlatooningInstance.addedBy = platooningPartner.id;
+
+                            platooningInstances.push(partnerPlatooningInstance);
+                        }
+                    }
+                }
+            }
+            truckData.trucks[truckIndex].platooningLog = platooningInstances;
+            console.log(truck);
+        }
+    }
+    
 
 
+    
 }
 
 function updateList(){
