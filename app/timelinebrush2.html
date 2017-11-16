@@ -62,6 +62,11 @@ path {
     stroke-dasharray: 5
 
 }
+.highlightCircle{
+    stroke:steelblue;
+    fill:none;
+    stroke-width: 1px;
+}
 /*ul{
     float:left;
     display: block;
@@ -89,6 +94,7 @@ path {
 <script src="https://d3js.org/d3.v4.min.js"></script>
 <script>
 
+var truckData = 0;
 var activeTrucks = [];
 var maxTime =0;
 var brushedTrucks =[];
@@ -98,8 +104,9 @@ var currentMapTransform = -1;
 var platoons = [];
 var brushedPlatoons = [];
 var currentMouseOverTruck = -1;
-var currentTimeLineScrub = 0;
+var currentTimeLineScrub = -1;
 var timeLineLock = 0;
+var defaultPlanPlatooningTrucks = [];
 
 var svg = d3.select("svg"),
     margin = {top: 20, right: 20, bottom: 110, left: 40},
@@ -192,9 +199,9 @@ d3.json("/data/outputTruncatedRoutes.json", function(error, data1) {
         });
         
         
-        calculateActiveTrucks(data1);
-        calculatePlatoons(data1);
-
+        truckData = data1;
+        calculateActiveTrucks();
+        calculatePlatoons();
         var data = activeTrucks;
 
         x.domain(d3.extent(data, function(d) { return d.time; }));
@@ -251,17 +258,19 @@ d3.json("/data/outputTruncatedRoutes.json", function(error, data1) {
             .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
             .call(zoom)
             .on("mouseover",function(){
-                console.log(currentTimeLineScrub);
+                //console.log(currentTimeLineScrub);
                 if(timeLineLock == 0){
                     currentTimeLineScrub = -1;
                     timeLineScrub.style("display", null);
+                    updateVis();
                 }
             })
             .on("mouseout",function(){
-                console.log(currentTimeLineScrub);
+                //console.log(currentTimeLineScrub);
                 if(timeLineLock == 0){
                     currentTimeLineScrub = -1;
                     timeLineScrub.style("display", "none");
+                    updateVis();
                 }
             })
             .on("mousemove", function(){
@@ -274,7 +283,8 @@ d3.json("/data/outputTruncatedRoutes.json", function(error, data1) {
                     timeLineScrub.attr("transform", "translate(" + x(d.time) + ",0)");
                     timeLineScrub.select("text").text(d.total +" trucks at "+ d.time);
                     currentTimeLineScrub = d;
-                    console.log(currentTimeLineScrub);
+                    //console.log(currentTimeLineScrub);
+                    updateVis();
                 }
             })
             .on("click", function(){
@@ -285,7 +295,7 @@ d3.json("/data/outputTruncatedRoutes.json", function(error, data1) {
                 else{
                     timeLineLock = 1;
                 }
-                console.log(timeLineLock);
+                //console.log(timeLineLock);
             });
       });
 });
@@ -373,7 +383,29 @@ function updateMap(){
         .attr("class", "mapOutline")
         .attr("d", outline(mapCoords.coordinates));
 
-    brushedTrucks.forEach(function(d) { 
+    if(currentTimeLineScrub != -1){
+        truckDataAtTimeStep = currentTimeLineScrub.trucksAtTimestep;
+        for(var truckIndex in truckDataAtTimeStep){
+            var truck = truckDataAtTimeStep[truckIndex];
+            //position it at the location in route that corresponds to the correct time
+            // beware of the pos history not being correctly in sync with route due to truncation
+            var total_time = truck.deadline - truck.start_time;
+            var progress = (currentTimeLineScrub.time - truck.start_time)/ total_time;
+            var locationAtScrub = truck.route[parseInt((truck.route.length-1)*progress)];
+            
+
+            //add visual indication of platooning trucks
+
+            container.append("circle")
+                .attr("r", 5)
+                .attr("class", "highlightCircle")
+                .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                .enter();
+        }
+    }else{
+        truckDataAtTimeStep = brushedTrucks;
+    }
+    truckDataAtTimeStep.forEach(function(d) { 
         //did = "#"+d.id;
         paths.append("path")
             .attr("class", "line")
@@ -403,7 +435,7 @@ function updateMap(){
         if(typeof(d3.event.transform) != 'undefined'){
             currentMapTransform = d3.event.transform;
         }
-        paths.attr("transform", currentMapTransform);
+        container.attr("transform", currentMapTransform);
         //paths.attr("transform", d3.event.transform);
     }
 
@@ -418,10 +450,10 @@ function updateMap(){
 
 
 
-function calculateActiveTrucks(data1){
-    var stepLength = 600;
+function calculateActiveTrucks(){
+    var stepLength = 300;
     
-    maxTime = d3.max(data1.trucks, function(d){return d.deadline});
+    maxTime = d3.max(truckData.trucks, function(d){return d.deadline});
     steps = maxTime/stepLength;
 
     //sum up how many trucks are active at all times
@@ -431,11 +463,11 @@ function calculateActiveTrucks(data1){
         tick.time = i*stepLength;
         tick.total = 0;
         tick.trucksAtTimestep= [];
-        for(var t=0;t< data1.trucks.length; t++){
-            if(tick.time <= data1.trucks[t].deadline && data1.trucks[t].start_time <= tick.time){
+        for(var t=0;t< truckData.trucks.length; t++){
+            if(tick.time <= truckData.trucks[t].deadline && truckData.trucks[t].start_time <= tick.time){
                 tick.total ++;
                 //lägg in lista med referenser istället.
-                tick.trucksAtTimestep.push(data1.trucks[t]);
+                tick.trucksAtTimestep.push(truckData.trucks[t]);
             }
         }
         activeTrucks.push(tick);
@@ -444,32 +476,85 @@ function calculateActiveTrucks(data1){
 }
 
 //Current state: every truck saves it's adapted plans into an array
-function calculatePlatoons(data){
-    for(var truckIndex in data.trucks){
-        truck = data.trucks[truckIndex];
-        var platoon = {};
-        var trucksInPlatoon = [];
+function calculatePlatoons(){
+    
+    //system for finding trucks that do not have an adaptde plann, but still platooned.
+    allTrucks = [];
+    adaptedPlanTrucks = [];
+    platooningTrucks = [];
 
-        for(var phIndex in truck.plan_history){
-            var plan = truck.plan_history[phIndex];
-            //console.log(plan.plan_type);
-            if(plan.plan[0].plan_type == "Adapted_plan"){
-                /*console.log(truck.id);
-                console.log(plan.plan[0].leader);
-                console.log(plan.start_time);
-                console.log(plan.end_time);*/
+    for(var truckIndex in truckData.trucks){
+        truck = truckData.trucks[truckIndex];
+        allTrucks.push(truck.id);
 
-                trucksInPlatoon.push(truck);
-                for(var l in data.trucks){
-                    if(data.trucks[l].id == plan.plan[0].leader)
-                    trucksInPlatoon.push(data.trucks[l]);
+        if(truck.plan_history.length >1){
+            var platoon = {};
+            var thisTruckPlatoonedWith = [];
+
+            for(var pIndex in truck.plan_history){
+                var truckPlan = truck.plan_history[pIndex];
+                if(truckPlan.plan[0].plan_type == "Adapted_plan"){
+                    if(typeof(platoon[truck.id]) === 'undefined'){
+                        platoon[truck.id] = 0;
+                        thisTruckPlatoonedWith.push(truck);
+                        adaptedPlanTrucks.push(truck.id);
+                    }
+                    for(var lead in truckData.trucks){
+                        if(truckData.trucks[lead].id == truckPlan.plan[0].leader && typeof(platoon[truckData.trucks[lead].id]) === 'undefined'){
+                            platoon[truckData.trucks[lead].id] = 0;
+                            thisTruckPlatoonedWith.push(truckData.trucks[lead]);
+                            platooningTrucks.push(truckData.trucks[lead].id);
+
+                            //console.log(typeof(truckData.trucks[lead].platoonedWith) === 'undefined');
+                            if(typeof(truckData.trucks[lead].platoonedWith) === 'undefined'){
+                                truckData.trucks[lead].platoonedWith = [];
+                                truckData.trucks[lead].platoonedWith.push(truck);
+                            }else{
+                                var idsInPlatoonedwith = []
+                                for(var plw in truckData.trucks[lead].platoonedWith){
+                                    idsInPlatoonedwith.push(truckData.trucks[lead].platoonedWith[plw].id);
+                                }
+                                if(!idsInPlatoonedwith.includes(truck.id)){
+                                    console.log(truck.id);
+                                    console.log(idsInPlatoonedwith);
+                                    
+                                    truckData.trucks[lead].platoonedWith.push(truck);        
+                                }   
+                            //console.log(truckData.trucks[lead].platoonedWith);
+                            }
+
+                        }
+                    }
+
                 }
-
+                
             }
-            
+            console.log(thisTruckPlatoonedWith);
+            truckData.trucks[truckIndex].platoonedWith = thisTruckPlatoonedWith;
         }
-       // console.log(trucksInPlatoon);
     }
+
+    var defaultPlanPlatooners =[];
+
+    for(var i in platooningTrucks){
+        if(!adaptedPlanTrucks.includes(platooningTrucks[i])){
+            defaultPlanPlatooners.push(platooningTrucks[i]);
+
+        }
+    }
+
+    for(var t in truckData.trucks){
+        if(defaultPlanPlatooners.includes(truckData.trucks[t].id)){
+            console.log(truckData.trucks[t]);
+            defaultPlanPlatooningTrucks.push(truckData.trucks[t]);
+        }
+    }
+    //console.log(truckData.trucks);
+    //console.log(defaultPlanPlatooners);
+
+
+
+
 }
 
 function updateList(){
@@ -496,16 +581,18 @@ function getBrushedTrucks(){
     for(var i=left; i<right;i++){
         selectedTrucks.push(activeTrucks[i]);
     }
-    
-    for(var timeStepIndex in selectedTrucks){
-        var timeStep = selectedTrucks[timeStepIndex];
+    if(typeof(selectedTrucks)!= 'undefined'){
 
-        for(var truckIndex in timeStep.trucksAtTimestep){
-            var truck = timeStep.trucksAtTimestep[truckIndex];
+        for(var timeStepIndex in selectedTrucks){
+            var timeStep = selectedTrucks[timeStepIndex];
 
-            if(typeof(truckIDs[truck.id]) === 'undefined'){
-                truckIDs[truck.id] = 0;
-                brushedTrucks.push(truck);
+            for(var truckIndex in timeStep.trucksAtTimestep){
+                var truck = timeStep.trucksAtTimestep[truckIndex];
+
+                if(typeof(truckIDs[truck.id]) === 'undefined'){
+                    truckIDs[truck.id] = 0;
+                    brushedTrucks.push(truck);
+                }
             }
         }
     }
