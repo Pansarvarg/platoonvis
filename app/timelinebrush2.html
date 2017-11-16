@@ -63,9 +63,9 @@ path {
 
 }
 .highlightCircle{
-    stroke:steelblue;
+    stroke:darkgrey;
     fill:none;
-    stroke-width: 1px;
+    stroke-width: 2px;
 }
 /*ul{
     float:left;
@@ -174,7 +174,7 @@ var context = svg.append("g")
     .attr("transform", "translate(" + margin2.left + "," + margin2.top + ")");
 
 
-d3.json("/data/outputTruncatedRoutes.json", function(error, data1) {
+d3.json("/data/outputTruncatedRoutes2.json", function(error, data1) {
     if (error) throw error;
     
     // Load the map of sweden and draw it 
@@ -389,18 +389,71 @@ function updateMap(){
             var truck = truckDataAtTimeStep[truckIndex];
             //position it at the location in route that corresponds to the correct time
             // beware of the pos history not being correctly in sync with route due to truncation
+
+            //TODO rework routepos to correct for speeeeed
             var total_time = truck.deadline - truck.start_time;
             var progress = (currentTimeLineScrub.time - truck.start_time)/ total_time;
             var locationAtScrub = truck.route[parseInt((truck.route.length-1)*progress)];
-            
-
-            //add visual indication of platooning trucks
-
+            var isPlatooning = 0;
             container.append("circle")
-                .attr("r", 5)
-                .attr("class", "highlightCircle")
-                .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
-                .enter();
+                        .attr("r", 5)
+                        .attr("class", "highlightCircle")
+                        .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                        .enter();
+        
+            for(var sectionIndex in truck.platooningLog){
+                var section = truck.platooningLog[sectionIndex];
+                if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
+                    if (section.plan.merge_distance != 0){
+                        container.append("circle")
+                            .attr("r", 5)
+                            .attr("class", "highlightCircle")
+                            .style("fill","orange")
+                            .style("stroke","0")
+                            .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                            .enter();
+                    }
+                    if (section.plan.merge_distance == 0){
+                        container.append("circle")
+                            .attr("r", 8)
+                            .attr("class", "highlightCircle")
+                            .style("fill","red")
+                            .style("stroke","0")
+                            .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                            .enter(); 
+                    }
+                }
+
+            }
+
+/*
+
+
+                if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time && section.plan.merge_distance == 0){
+                    container.append("circle")
+                        .attr("r", 8)
+                        .attr("class", "highlightCircle")
+                        .style("fill","red")
+                        .style("stroke","0")
+                        .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                        .enter(); 
+                }else if (truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time ){
+                    container.append("circle")
+                        .attr("r", 5)
+                        .attr("class", "highlightCircle")
+                        .style("fill","orange")
+                        .style("stroke","0")
+                        .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                        .enter();
+
+                }else{
+                    container.append("circle")
+                        .attr("r", 5)
+                        .attr("class", "highlightCircle")
+                        .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                        .enter();
+                }*/
+            
         }
     }else{
         truckDataAtTimeStep = brushedTrucks;
@@ -412,21 +465,25 @@ function updateMap(){
             .attr("id", d.id)
             .attr("class", "truckRoute")
             .attr("d", pathline(d.route))
-            .on("mouseover",function(d,i){
-                currentMouseOverTruck = d3.select(this)._groups[0][0].id;
-                //console.log(d3.select(this)._groups[0][0].id);
-                d3.select(this)
-                    .style("stroke","red")
-                    .style("z-index", "10");//it is style 
-           })
-            .on("mouseout",function(d,i){
-                currentMouseOverTruck = -1;
-                d3.select(this)
-                    .transition()
-                    .duration(500)
-                    .style("stroke","rgba(50,50,0, 0.2)");//it is style 
-            });;     
+            .on("mouseover", mouseOver)
+            .on("mouseout", mouseOut);
     });
+
+    function mouseOver(){
+        currentMouseOverTruck = d3.select(this)._groups[0][0].id;
+        //console.log(d3.select(this)._groups[0][0].id);
+        d3.select(this)
+            .style("stroke","red")
+            .style("z-index", "10");
+    }
+    function mouseOut(){
+        currentMouseOverTruck = -1;
+        d3.select(this)
+            .transition()
+            .duration(500)
+            .style("stroke","rgba(50,50,0, 0.2)");//it is style 
+    
+    }
 
     //TODO Fix zoom behaviour to stop setting pos by brushing. very annoying
     function mapZoomed() {
@@ -595,7 +652,7 @@ function calculatePlatoons(){
                 }
             }
             truckData.trucks[truckIndex].platooningLog = platooningInstances;
-            console.log(truck);
+            //console.log(truck);
         }
     }
     
