@@ -391,26 +391,63 @@ function updateMap(){
             // beware of the pos history not being correctly in sync with route due to truncation
 
             //TODO rework routepos to correct for speeeeed
-            var total_time = truck.deadline - truck.start_time;
+            var time = currentTimeLineScrub.time;
+            //var pathIndexAtScrub = calculatePathIndexAtTimeStep(truck, time);
+            var pathIndexArray = calculatePathIndexAtTimeStep(truck, time);
+            var t = pathIndexArray[1];
+            var locationAtScrub = truck.route[pathIndexArray[0]];
+            /*if(typeof(truck.route[parseInt(pathIndexArray[0]) + 1]) === 'undefined'){
+                console.log(truck.route[pathIndexArray[0]]);
+                console.log(parseInt(pathIndexArray[0]) + 1);
+                //console.log(pathIndexArray);
+                //console.log(locationAtScrub);
+                //console.log((pathIndexArray[0]+1));
+            }*/
+            var interpolatedLong = locationAtScrub.long;
+            var interpolatedLat = locationAtScrub.lat;
+            //calculate interpolation for position at timestep
+            /*if((parseInt(pathIndexArray[0]) + 1) > truck.route.length ){
+                interpolatedLong = locationAtScrub.long;
+                interpolatedLat = locationAtScrub.lat;
+            }else{*/
+
+            if((parseInt(pathIndexArray[0]) + 1) <= truck.route.length ){
+                console.log("interpolating by ");
+                console.log(1-t);
+                interpolatedLong = ((1-t)*truck.route[parseInt(pathIndexArray[0])].long) + (t * locationAtScrub.long);
+                interpolatedLat = ((1-t)*truck.route[parseInt(pathIndexArray[0])].lat) + (t * locationAtScrub.lat);
+            }
+            
+
+            /*var total_time = truck.deadline - truck.start_time;
             var progress = (currentTimeLineScrub.time - truck.start_time)/ total_time;
             var locationAtScrub = truck.route[parseInt((truck.route.length-1)*progress)];
+
+            console.log(parseInt((truck.route.length-1)*progress));
+            console.log(pathIndexAtScrub);
+            */
+            //var locationAtScrub = truck.route[pathIndexAtScrub];
             var isPlatooning = 0;
             container.append("circle")
                         .attr("r", 5)
                         .attr("class", "highlightCircle")
-                        .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                        //.attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                        .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
                         .enter();
         
             for(var sectionIndex in truck.platooningLog){
                 var section = truck.platooningLog[sectionIndex];
-                if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
+                //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
+                if(time < section.end_time && time >= section.start_time){
                     if (section.plan.merge_distance != 0){
+                        //console.log(section);
+                        //console.log(time);
                         container.append("circle")
                             .attr("r", 5)
                             .attr("class", "highlightCircle")
                             .style("fill","orange")
                             .style("stroke","0")
-                            .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                            .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
                             .enter();
                     }
                     if (section.plan.merge_distance == 0){
@@ -419,12 +456,13 @@ function updateMap(){
                             .attr("class", "highlightCircle")
                             .style("fill","red")
                             .style("stroke","0")
-                            .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                            .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
                             .enter(); 
                     }
                 }
 
             }
+        }
 
 /*
 
@@ -453,8 +491,7 @@ function updateMap(){
                         .attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
                         .enter();
                 }*/
-            
-        }
+        
     }else{
         truckDataAtTimeStep = brushedTrucks;
     }
@@ -505,7 +542,60 @@ function updateMap(){
     }*/
 };
 
+function calculatePathIndexAtTimeStep(truck, time){
+    
+    var distanceTravelled = 0;
+    var totalTravelTime = truck.deadline - truck.start_time; //truck total time ish 4h
+    var progressedTime = (time - truck.start_time); // how far along this truck has been scrubbed
+    var timeRemaining = progressedTime;
+    var returnArray = []
 
+    //console.log(truck.path_weights.length);
+    //console.log(truck.route.length);
+
+
+    for(var sh in truck.speed_history){
+        var segment = truck.speed_history[sh];
+        var segmentTime = segment.end_time - segment.start_time;
+        if(timeRemaining > segmentTime){
+            distanceTravelled += segment.speed * segmentTime;
+            timeRemaining = timeRemaining - segmentTime;
+        }else{
+            distanceTravelled += segment.speed * timeRemaining;
+            break
+        }
+    }
+
+
+    //console.log(distanceTravelled);
+    var sumWeights = 0;
+    var finalPathProgress = 0; 
+    for(var pathIndex in truck.path_weights){
+        if(sumWeights < distanceTravelled && sumWeights + truck.path_weights[pathIndex] < distanceTravelled){
+            sumWeights += truck.path_weights[pathIndex];
+
+
+        }else if(sumWeights < distanceTravelled && sumWeights + truck.path_weights[pathIndex] > distanceTravelled){
+            sumWeights += truck.path_weights[pathIndex]
+            if(truck.path_weights[pathIndex] != 0){
+                finalPathProgress = (sumWeights - distanceTravelled) / truck.path_weights[pathIndex];
+                //console.log((sumWeights - distanceTravelled) / truck.path_weights[pathIndex]);
+            }
+            break
+
+            //console.log(sumWeights);
+            //console.log(distanceTravelled);
+            //console.log(pathIndex/truck.path_weights.length);
+        }
+        
+    }
+    
+    returnArray.push(pathIndex);
+    returnArray.push(finalPathProgress);
+    return returnArray;
+
+    //return truck.path_weights.length-1;
+}
 
 function calculateActiveTrucks(){
     var stepLength = 300;
