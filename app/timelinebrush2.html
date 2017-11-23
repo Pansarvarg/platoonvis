@@ -81,11 +81,11 @@ path {
     height:700px;
     width:493px;
     border:1px solid silver;
+    overflow: hidden;
      
 }
 #platoonPanelContent{
-    margin-left: 10px;
-    margin-top: 10px;
+
     height:100%;
     width:100%;
 }
@@ -96,13 +96,11 @@ path {
 }
 .platoonRect{
     fill:green;
-    stroke: darkgreen;
-    stroke-width: 2px;
+
 }
 .mergeRect{
     fill:orange;
-    stroke: darkorange;
-    stroke-width: 2px;
+
 }
 
 .hover-line{
@@ -186,6 +184,7 @@ var currentSelectedTrucks = [];
 var timeLineLock = 0;
 var defaultPlanPlatooningTrucks = [];
 var truckIdDict = {};
+var partners = {}; 
 
 var svg = d3.select("svg"),
     margin = {top: 20, right: 20, bottom: 110, left: 40},
@@ -460,6 +459,17 @@ function updateMap(){
             .call(zoom);
 
 
+    //TODO make a button that clears selected trucks
+
+    /*var button = mapView.append("rect")
+        .attr("width", 50)
+        .attr("height", 20)
+        .style("fill", "darkgrey")
+        .attr("transform", 
+                  "translate(" + eval(width3 - margin3.right - 50) + "," + eval(height3 - margin3.bottom - 20) + ")")
+
+    var clear = */
+
     var rect = mapView.append("rect")
         .attr("width", width3)
         .attr("height", height3)
@@ -498,83 +508,97 @@ function updateMap(){
         .attr("class", "mapOutline")
         .attr("d", outline(mapCoords.coordinates));
 
-    if(currentTimeLineScrub != -1){
 
+    partners = {};
+    if(currentTimeLineScrub != -1){
         currentNumberOfPlatooningTrucks = 0;
         currentNumberOfMergingTrucks = 0;
         truckDataAtTimeStep = currentTimeLineScrub.trucksAtTimestep;
         for(var truckIndex in truckDataAtTimeStep){
             var truck = truckDataAtTimeStep[truckIndex];
-            //position it at the location in route that corresponds to the correct time
-            // beware of the pos history not being correctly in sync with route due to truncation
-
-            //TODO rework routepos to correct for speeeeed
-            var time = currentTimeLineScrub.time;
-            //var pathIndexAtScrub = calculatePathIndexAtTimeStep(truck, time);
-            var pathIndexArray = calculatePathIndexAtTimeStep(truck, time);
-            var t = pathIndexArray[1];
-            var locationAtScrub = truck.route[pathIndexArray[0]];
-            var interpolatedLong = locationAtScrub.long;
-            var interpolatedLat = locationAtScrub.lat;
-            
-            if((parseInt(pathIndexArray[0]) + 1) <= truck.route.length ){
-                interpolatedLong = ((1-t)*truck.route[parseInt(pathIndexArray[0])].long) + (t * locationAtScrub.long);
-                interpolatedLat = ((1-t)*truck.route[parseInt(pathIndexArray[0])].lat) + (t * locationAtScrub.lat);
-            }
-            
-            container.append("circle")
-                        .attr("r", 5)
-                        .attr("class", "highlightCircle")
-                        //.attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
-                        .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
-                        .enter();
             if(typeof(truck.platooningLog) != 'undefined'){
-                
-                for(var sectionIndex in truck.platooningLog){
-                    var section = truck.platooningLog[sectionIndex];
-                    //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
-                    if(time < section.end_time && time >= section.start_time){
-                        //console.log(section);
-                        var platoonClass ="follower";
-                        var leader = section.addedBy;
-                        if(section.addedBy == "self"){
-                            platoonClass = "leader";
-                        }
-                        if (section.plan.merge_distance != 0){
-                            currentNumberOfMergingTrucks += 1;
-                            container.append("circle")
-                                .attr("r", 5)
-                                .attr("class", "highlightCircle")
-                                .attr("class", "merging " + platoonClass)
-                                .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
-                                .on("mouseover", mapMouseOver)
-                                .on("mouseout", mapMouseOut)//rework so it shows maybe correct colors, and working click functionalitey
-                                .enter();
-                                //Probably needs it's own functions to work correctly...
-
-                                //TODO on hover the whole route plus platooning partner trucks should be highlighted for easier exploration
-                                //TODO on click to add only selected trucks should be visible on timeline (try this, might be weird)
-                                //TODO on mouse over the platoon path should be shown. needs data structure. at least go through platoonlog to loog into future. However the speed is done runtime.... hmmm think about it
-
-                        }
-                        if (section.plan.merge_distance == 0){
-                            if(platoonClass == "leader"){
-
-                                currentNumberOfPlatooningTrucks +=2;
-                                container.append("circle")
-                                    .attr("r", 8)
-                                    //.attr("class", "highlightCircle")
-                                    .attr("class", "merged " + platoonClass)
-                                    .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
-                                    .on("mouseover", mapMouseOver)
-                                    .on("mouseout", mapMouseOut)
-                                    .enter(); 
-                            }
-                        }
+                for(var selected in currentSelectedTrucks){
+                    for(var partner in truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith){
+                        partners[truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith[partner].id] = "t" + truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith[partner].id.toString();
                     }
 
                 }
             }
+            
+            if(currentSelectedTrucks.includes("t"+ truck.id.toString()) || typeof(partners[truck.id.toString()]) != 'undefined' || currentSelectedTrucks.length == 0){
+                //position it at the location in route that corresponds to the correct time
+                // beware of the pos history not being correctly in sync with route due to truncation
+                //TODO rework routepos to correct for speeeeed
+
+                //console.log(truck.id);
+                var time = currentTimeLineScrub.time;
+                //var pathIndexAtScrub = calculatePathIndexAtTimeStep(truck, time);
+                var pathIndexArray = calculatePathIndexAtTimeStep(truck, time);
+                var t = pathIndexArray[1];
+                var locationAtScrub = truck.route[pathIndexArray[0]];
+                var interpolatedLong = locationAtScrub.long;
+                var interpolatedLat = locationAtScrub.lat;
+                
+                if((parseInt(pathIndexArray[0]) + 1) <= truck.route.length ){
+                    interpolatedLong = ((1-t)*truck.route[parseInt(pathIndexArray[0])].long) + (t * locationAtScrub.long);
+                    interpolatedLat = ((1-t)*truck.route[parseInt(pathIndexArray[0])].lat) + (t * locationAtScrub.lat);
+                }
+                
+                container.append("circle")
+                            .attr("r", 5)
+                            .attr("class", "highlightCircle")
+                            //.attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                            .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
+                            .enter();
+                if(typeof(truck.platooningLog) != 'undefined'){
+                    
+                    
+                    for(var sectionIndex in truck.platooningLog){
+                        var section = truck.platooningLog[sectionIndex];
+                        //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
+                        if(time < section.end_time && time >= section.start_time){
+                            //console.log(section);
+                            var platoonClass ="follower";
+                            var leader = section.addedBy;
+                            if(section.addedBy == "self"){
+                                platoonClass = "leader";
+                            }
+                            if (section.plan.merge_distance != 0){
+                                currentNumberOfMergingTrucks += 1;
+                                container.append("circle")
+                                    .attr("r", 5)
+                                    .attr("class", "highlightCircle")
+                                    .attr("class", "merging " + platoonClass)
+                                    .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
+                                    .on("mouseover", mapMouseOver)
+                                    .on("mouseout", mapMouseOut)//rework so it shows maybe correct colors, and working click functionalitey
+                                    .enter();
+                                    //Probably needs it's own functions to work correctly...
+
+                                    //TODO on hover the whole route plus platooning partner trucks should be highlighted for easier exploration
+                                    //TODO on click to add only selected trucks should be visible on timeline (try this, might be weird)
+                                    //TODO on mouse over the platoon path should be shown. needs data structure. at least go through platoonlog to loog into future. However the speed is done runtime.... hmmm think about it
+
+                            }
+                            if (section.plan.merge_distance == 0){
+                                if(platoonClass == "leader"){
+
+                                    currentNumberOfPlatooningTrucks +=2;
+                                    container.append("circle")
+                                        .attr("r", 8)
+                                        //.attr("class", "highlightCircle")
+                                        .attr("class", "merged " + platoonClass)
+                                        .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
+                                        .on("mouseover", mapMouseOver)
+                                        .on("mouseout", mapMouseOut)
+                                        .enter(); 
+                                }
+                            }
+                        }
+
+                    }
+                }
+            }   
         }
         
     }else{
@@ -592,20 +616,10 @@ function updateMap(){
     // paint that section with another color
     // does not show correct speeds, but is simpler and faster, could be reowrked later for correct view.
 
+    //console.log(currentSelectedTrucks);
     for(var truckIndex in truckDataAtTimeStep){
         var truck = truckDataAtTimeStep[truckIndex];
-        /*if(typeof(truck.platooningLog) != 'undefined'){
-            for(var sectionIndex in truck.platooningLog){
-                //section start_time how far along total time 
-                var start = section.start_time - truck.start_time;
-                var end = section.end_time - truck.start_time;
-                //bisect all the routes.
-
-            }
-
-        }*/
-        if(currentSelectedTrucks.includes((truck.id).toString())){
-
+        if(currentSelectedTrucks.includes("t"+(truck.id).toString())){
             paths.append("path")
                 .attr("class", "line truckRoute")
                 .attr("id", "t" + truck.id)
@@ -615,6 +629,17 @@ function updateMap(){
                 .on("mouseover", mapMouseOver)
                 .on("mouseout", mapMouseOut)
                 .on("click", mapMouseClick);
+        }else if(typeof(partners[truck.id]) != 'undefined'){
+            paths.append("path")
+                .attr("class", "line truckRoute")
+                .attr("id", "t" + truck.id)
+                .style("stroke","pink")
+                .style("stroke-width","8")
+                .attr("d", pathline(truck.route))
+                .on("mouseover", mapMouseOver)
+                .on("mouseout", mapMouseOut)
+                .on("click", mapMouseClick);
+
         }else{
 
             paths.append("path")
@@ -655,14 +680,9 @@ function updateMap(){
             .style("stroke","royalblue")
             .style("stroke-width","10")
             .style("z-index", "10");
-
-
         
         if(typeof(truckIdDict[currentMouseOverTruck].platoonedWith) != 'undefined'){
-            
-            for(var relatedTruckIndex in truckIdDict[currentMouseOverTruck].platoonedWith){
-                
-                
+            for(var relatedTruckIndex in truckIdDict[currentMouseOverTruck].platoonedWith){                
                 var id = "#t" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
                 
                 d3.select(id)
@@ -991,13 +1011,16 @@ function updatePlatoonPanel(){
         fullTruckData.push(truckIdDict[currentSelectedTrucks[i]]);
     }
     
-    var margin4 = {top: 30, right: 20, bottom: 30, left: 50};
+    var margin4 = {top: 30, right: 20, bottom: 30, left: 20};
     var width4 = 500 - margin4.left - margin4.right;
     var height4 = 700 - margin4.top - margin4.bottom;
     
-    var trip = truckList.append("svg")
+
+    var svgPlatoons = truckList.append("svg")
             .attr("width", width4 + margin4.left + margin4.right)
             .attr("height", height4 + margin4.top + margin4.bottom);
+    var trip = svgPlatoons.append("g")
+        .attr("transform", "translate("+margin4.left +","+margin4.top +")");
 
     var x4 = d3.scaleLinear().range([0, width4])  
         .domain([d3.min(fullTruckData, function(d){return d.start_time}), d3.max(fullTruckData, function(d){return d.deadline})]);
@@ -1031,57 +1054,37 @@ function updatePlatoonPanel(){
     var counter = 1;
     var yHeight = 30;
     var rectClass = "merge-rect";
-    console.log(fullTruckData);
-    trip.append("g")
-        .selectAll(".truckTrip")
-        .data(fullTruckData)
-        .enter()
-            .append("rect")
-            .attr("class", "truckTrip")
-            .attr("x", function(d,i){
-                return x4(d.start_time)
-            })
-            .attr("y", eval(counter*yHeight))
-            .attr("height", 20)/* function(d,i){
-                return y4.bandwidth()-1;
-            })*/
-            .attr("width", function(d){
-                return x4(d.deadline);
-            })
-            .enter();
 
-    /*if(fullTruckData.length != 0){
-        if(typeof(fullTruckData[0].platooningLog) != 'undefined'){
-            console.log(fullTruckData[0].platooningLog[0]);
+
+    //TODO bring in platoonedWith trucks into view, think about what data we need to show and why, don't overload the panel with nonsense. add axles
+
+    for(var truckIndex in fullTruckData){
+        var truck = fullTruckData[truckIndex];
         trip.append("g")
-            .selectAll(".platoonRect")
-            .data([fullTruckData[0].platooningLog[0]])
+            .selectAll(".truckTrip")
+            .data([truck])
             .enter()
                 .append("rect")
-                .attr("class", "platoonRect")
+                .attr("class", "truckTrip")
                 .attr("x", function(d,i){
                     return x4(d.start_time)
                 })
                 .attr("y", eval(counter*yHeight))
-                .attr("height", 20)
+                .attr("height", 20)/* function(d,i){
+                    return y4.bandwidth()-1;
+                })*/
                 .attr("width", function(d){
-                    return x4(d.end_time);
+                    return x4(d.deadline);
                 })
                 .enter();
-        }
-    }*/
-    for(var truckIndex in fullTruckData){
-        var truck = fullTruckData[truckIndex];
+
+    
         if(typeof(truck.platooningLog) != 'undefined'){
             //console.log("has log");
             for(var sectionIndex in truck.platooningLog){
                 var section = truck.platooningLog[sectionIndex];
                 //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
                 if(section.plan.merge_distance == 0){
-                    console.log(section);
-                    console.log(section.start_time);
-                    console.log(section.end_time);
-                    console.log(section.plan.merge_distance);
 
                     trip.append("g")
                         .selectAll(".platoonRect")
@@ -1118,6 +1121,7 @@ function updatePlatoonPanel(){
                 }
             }
         }
+        counter ++;
     }
 
 }
