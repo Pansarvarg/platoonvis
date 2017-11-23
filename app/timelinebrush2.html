@@ -509,21 +509,21 @@ function updateMap(){
         .attr("d", outline(mapCoords.coordinates));
 
 
-    partners = {};
+    //partners = {};
     if(currentTimeLineScrub != -1){
         currentNumberOfPlatooningTrucks = 0;
         currentNumberOfMergingTrucks = 0;
         truckDataAtTimeStep = currentTimeLineScrub.trucksAtTimestep;
         for(var truckIndex in truckDataAtTimeStep){
             var truck = truckDataAtTimeStep[truckIndex];
-            if(typeof(truck.platooningLog) != 'undefined'){
+            /*if(typeof(truck.platooningLog) != 'undefined'){
                 for(var selected in currentSelectedTrucks){
                     for(var partner in truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith){
                         partners[truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith[partner].id] = "t" + truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith[partner].id.toString();
                     }
 
                 }
-            }
+            }*/
             
             if(currentSelectedTrucks.includes("t"+ truck.id.toString()) || typeof(partners[truck.id.toString()]) != 'undefined' || currentSelectedTrucks.length == 0){
                 //position it at the location in route that corresponds to the correct time
@@ -734,6 +734,7 @@ function updateMap(){
         }else{
             currentSelectedTrucks.push(clickedTruckId);
         }
+        calculatePlatoonPartners();
         updatePlatoonPanel();
         //console.log(currentSelectedTrucks);
     }
@@ -1057,7 +1058,11 @@ function updatePlatoonPanel(){
 
 
     //TODO bring in platoonedWith trucks into view, think about what data we need to show and why, don't overload the panel with nonsense. add axles
-
+    for(key in partners){
+        //console.log(key);
+        fullTruckData.push(truckIdDict[partners[key]]);
+    }
+    console.log(fullTruckData);
     for(var truckIndex in fullTruckData){
         var truck = fullTruckData[truckIndex];
         trip.append("g")
@@ -1213,6 +1218,20 @@ function updateVis(){
     updateMap();
 }
 
+function calculatePlatoonPartners() {
+    partners = {};
+    for(var selected in currentSelectedTrucks){
+        var truck = truckIdDict[currentSelectedTrucks[selected].toString()];
+        if(typeof(truck.platooningLog) != 'undefined'){
+            for(var partner in truck.platoonedWith){
+                partners[truck.platoonedWith[partner].id] = "t" + truck.platoonedWith[partner].id.toString();
+            }
+
+        }
+    }
+    console.log(partners);
+
+}
 
 
 </script>
