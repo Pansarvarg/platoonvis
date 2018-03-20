@@ -1,182 +1,6 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
-<style>
-
-
-body{
-    font-family: Arial,Helvetica Neue,Helvetica,sans-serif; 
-    font size: 0.7em;
-}
-.area {
-  clip-path: url(#clip);
-}
-.area-grey{
-    fill: darkgrey;
-}
-
-.area-merging{
-    fill: orange;
-    
-}
-
-.area-platooning{
-    fill: green;
-    
-}
-
-.zoom {
-  cursor: move;
-  fill: none;
-  pointer-events: all;
-}
-
-.axis path,
-.axis line {
-    fill: none;
-    stroke: grey;
-    stroke-width: 1;
-    shape-rendering: crispEdges;
-}
-
-path { 
-    stroke: rgba(50,50,50, 0.1);
-    stroke-width: 4;
-    fill: none;
-    pointer-events: visibleStroke;
-}
-
-.platoon-line{
-    fill:none;
-    stroke:rgba(0,180,0,0.1);
-    stroke-width: 15px;
-}
-.merge-line{
-    fill:none;
-    stroke:rgba(255,165,0,0.07);
-    stroke-width: 12px;
-}
-
-#firstPanel{
-    height:700px;
-    padding-bottom: 5px;
-    
-}
-#secondPanel{
-    width:1200px;
-    border:1px solid silver;
-}
-
-.mapOutline{
-    /*stroke: rgba(50,50,50, 0.2);*/
-    stroke:silver;
-    stroke-width: 2;
-    fill:none;
-    /*fill: rgba(120,120,120, 0.05);   */
-}
-#map{
-    display: block;
-    float:left;
-    top:10px;
-    left:10px;
-    height:700px;
-    width:700px;
-    border:1px solid silver;
-     
-}
-#platoonPanel{
-    display: block;
-    float:left;
-    top:10px;
-    left:10px;
-    margin-left: 5px;
-    height:700px;
-    width:750px;
-    border:1px solid silver;
-    overflow: hidden;
-     
-}
-#platoonPanelContent{
-
-    height:100%;
-    width:100%;
-}
-
-.truckTrip{
-    fill:darkgrey;
-    
-}
-.platoonRect{
-    fill:green;
-
-}
-.mergeRect{
-    fill:orange;
-
-}
-
-.hover-line{
-    stroke-width:2px;
-    stroke: steelblue;
-    stroke-dasharray: 5
-
-}
-.hover-locked{
-    stroke-width:5px;
-    stroke: green;
-}
-
-.highlightCircle{
-    stroke:darkslategrey;
-    fill:none;
-    stroke-width: 2px;
-}
-
-#text-label{
-    color: red;
-}
-
-.leader{
-    stroke:green;
-    stroke-width:2px;
-}
-.follower{
-    stroke:orange;
-    stroke-width:1px;
-}
-
-.merging{
-    fill:orange;
-}
-.merged{
-    fill:green;
-}
-
-#parameterDisplay{
-    color: darkgrey;
-    height:20px;
-    width:1200px;
-}
-
-.adaptation-line{
-    stroke: darkgrey;
-    stroke-width: 4;
-    fill: none;
-    pointer-events: visibleStroke;
-}
-.adaptation-platooning{
-    stroke:green;
-    stroke-width: 10px;
-}
-.speed-up{
-    stroke: red;
-}
-.slow-down{
-    stroke: green;
-}
-
-</style>
 <div id="parameterDisplay">
-
 </div>  
 <div id="firstPanel">
     <div id="map" >
@@ -189,9 +13,13 @@ path {
 </div>
 <div id="secondPanel">
     <div id="timeline">
-        <svg width="1200" height="300" ></svg>
+        <svg width="800" height="200" ></svg>
+        <div id="parCoordsPanel">
+        </div>
     </div>
+
 </div>
+<link rel="stylesheet" href="./css/style.css">
 <script src="https://d3js.org/d3.v4.min.js"></script>
 <script>
 //console.time("calcs");
@@ -208,6 +36,7 @@ var currentMapTransform = -1;
 var platoons = [];
 var brushedPlatoons = [];
 var currentMouseOverTruck = -1;
+var currentMouseOverCircle = -1;
 var currentTimeLineScrub = -1;
 var currentNumberOfPlatooningTrucks = 0;
 var currentNumberOfMergingTrucks = 0;
@@ -216,11 +45,12 @@ var timeLineLock = 0;
 var defaultPlanPlatooningTrucks = [];
 var truckIdDict = {};
 var partners = {}; 
+var dimensions =[];
 
 
 var svg = d3.select("svg"),
-    margin = {top: 20, right: 20, bottom: 110, left: 40},
-    margin2 = {top: 230, right: 20, bottom: 30, left: 40},
+    margin = {top: 20, right: 20, bottom: 80, left: 40},
+    margin2 = {top: 140, right: 20, bottom: 20, left: 40},
     width = +svg.attr("width") - margin.left - margin.right,
     height = +svg.attr("height") - margin.top - margin.bottom,
     height2 = +svg.attr("height") - margin2.top - margin2.bottom;
@@ -283,13 +113,13 @@ var focus = svg.append("g")
     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
 var selectionCounterText = focus.append("text")
-    .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+    .attr("transform", "translate(" + eval(width - 100) + "," + 0 + ")")
     .attr("class", "text-label")
     .style("fill", "dimgrey");
 
 var timeLineScrub = svg.append("g")
     .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
-    .attr("class", "text-labe timeLineScrub")
+    .attr("class", "text-label timeLineScrub")
     .style("fill", "dimgrey")
     .style("display", "none");
    
@@ -307,17 +137,16 @@ var context = svg.append("g")
 
 //d3.json("/data/outputTruncatedRoutes2.json", function(error, data1) {
 //d3.json("/data/output1000.json", function(error, data1) {
-d3.json("/data/output1000.json", function(error, data1) {
+d3.json("./data/output1000.json", function(error, data1) {
     if (error) throw error;
     
     // Load the map of sweden and draw it 
-    d3.json("/data/svarje.json", function(error, data2){
+    d3.json("./data/svarje.json", function(error, data2){
         if (error) throw error;
         data2.coordinates.forEach(function(d){
             d.long = +d.long;
             d.lat = +d.lat;
         });
-        
         mapCoords = data2;
         
         data1.trucks.forEach(function(d1){
@@ -329,6 +158,8 @@ d3.json("/data/output1000.json", function(error, data1) {
             d1.start_time = +d1.start_time;
             d1.end_time = +d1.end_time;
             d1.deadline = +d1.deadline;
+
+            
         });
         
         //console.time("calcs");
@@ -341,6 +172,10 @@ d3.json("/data/output1000.json", function(error, data1) {
 
         for(var index in truckData.trucks){
             var truck = truckData.trucks[index];
+
+            //Add additional data points to each truck
+            
+
             var truckId = "t" + truck.id;
             truckIdDict[truckId] = truck;
         }
@@ -388,7 +223,9 @@ function drawTimeline(){
     y2.domain(y.domain());
 
     //var focus = focusContainer.append("g");
-
+    /*var parse = d3.timeParse("%s");
+    var time = parse(1509392160);  
+    console.log(time); */
     focus.append("path")
         .datum(data)
         .attr("class", "area area-grey")
@@ -449,14 +286,15 @@ function drawTimeline(){
             if(timeLineLock == 0){
                 currentTimeLineScrub = -1;
                 timeLineScrub.style("display", null);
-                updateVis();
+                updateMap();
+
             }
         })
         .on("mouseout",function(){
             if(timeLineLock == 0){
                 currentTimeLineScrub = -1;
                 timeLineScrub.style("display", "none");
-                updateVis();
+                updateMap();
             }
         })
         .on("mousemove", function(){
@@ -469,7 +307,7 @@ function drawTimeline(){
                 timeLineScrub.attr("transform", "translate(" + x(d.time) + ",0)");
                 timeLineScrub.select("text").text(d.total +" trucks at "+ d.time);
                 currentTimeLineScrub = d;
-                updateVis();
+                updateMap();
             }
         })
         .on("click", function(){
@@ -493,6 +331,7 @@ function updateMap(){
     var width3 = 700 - margin3.left - margin3.right;
     var height3 = 700 - margin3.top - margin3.bottom;
 
+    var colorScale = d3.scaleOrdinal(d3.schemeCategory20);
 
     // Set the ranges
     var x3 = d3.scaleLinear().range([0, width3]);  
@@ -580,11 +419,20 @@ function updateMap(){
 
     //partners = {};
     if(currentTimeLineScrub != -1){
+        //console.log(currentTimeLineScrub);
         currentNumberOfPlatooningTrucks = 0;
         currentNumberOfMergingTrucks = 0;
         truckDataAtTimeStep = currentTimeLineScrub.trucksAtTimestep;
         for(var truckIndex in truckDataAtTimeStep){
             var truck = truckDataAtTimeStep[truckIndex];
+            var includedInBrush = false;
+            for(var index in brushedTrucks){
+                if(truck.id == brushedTrucks[index].id){
+                    includedInBrush = true;
+                    break;
+                }
+            }
+            if(includedInBrush == true){
             /*if(typeof(truck.platooningLog) != 'undefined'){
                 for(var selected in currentSelectedTrucks){
                     for(var partner in truckIdDict[currentSelectedTrucks[selected].toString()].platoonedWith){
@@ -593,82 +441,99 @@ function updateMap(){
 
                 }
             }*/
-            
-            if(currentSelectedTrucks.includes("t"+ truck.id.toString()) || typeof(partners[truck.id.toString()]) != 'undefined' || currentSelectedTrucks.length == 0){
-                //position it at the location in route that corresponds to the correct time
-                // beware of the pos history not being correctly in sync with route due to truncation
-                var time = currentTimeLineScrub.time;
-                //var pathIndexAtScrub = calculatePathIndexAtTimeStep(truck, time);
-                var pathIndexArray = calculatePathIndexAtTimeStep(truck, time);
-                var t = pathIndexArray[1];
-                var locationAtScrub = truck.route[pathIndexArray[0]];
-                var interpolatedLong = locationAtScrub.long;
-                var interpolatedLat = locationAtScrub.lat;
-                
-                if((parseInt(pathIndexArray[0]) + 1) <= truck.route.length ){
-                    interpolatedLong = ((1-t)*truck.route[parseInt(pathIndexArray[0])].long) + (t * locationAtScrub.long);
-                    interpolatedLat = ((1-t)*truck.route[parseInt(pathIndexArray[0])].lat) + (t * locationAtScrub.lat);
-                }
-                
-                
-                if(typeof(truck.platooningLog) != 'undefined'){
+
+                if(currentSelectedTrucks.includes("t"+ truck.id.toString()) || typeof(partners[truck.id.toString()]) != 'undefined' || currentSelectedTrucks.length == 0){
+                    //position it at the location in route that corresponds to the correct time
+                    // beware of the pos history not being correctly in sync with route due to truncation
+                    var time = currentTimeLineScrub.time;
+                    //var pathIndexAtScrub = calculatePathIndexAtTimeStep(truck, time);
+                    var pathIndexArray = calculatePathIndexAtTimeStep(truck, time);
+                    var t = pathIndexArray[1];
+                    var locationAtScrub = truck.route[pathIndexArray[0]];
+                    var interpolatedLong = locationAtScrub.long;
+                    var interpolatedLat = locationAtScrub.lat;
+                    
+                    if((parseInt(pathIndexArray[0]) + 1) <= truck.route.length ){
+                        interpolatedLong = ((1-t)*truck.route[parseInt(pathIndexArray[0])].long) + (t * locationAtScrub.long);
+                        interpolatedLat = ((1-t)*truck.route[parseInt(pathIndexArray[0])].lat) + (t * locationAtScrub.lat);
+                    }
                     
                     
-                    for(var sectionIndex in truck.platooningLog){
-                        var section = truck.platooningLog[sectionIndex];
-                        //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
-                        if(time < section.end_time && time >= section.start_time){
-                            //console.log(section);
-                            var platoonClass ="follower";
-                            var leader = section.addedBy;
-                            if(section.addedBy == "self"){
-                                platoonClass = "leader";
-                            }
-                            if (section.plan.merge_distance != 0){
-                                currentNumberOfMergingTrucks += 1;
-                                container.append("circle")
-                                    .attr("r", 5)
-                                    .attr("class", "merging " + platoonClass)
-                                    .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
-                                    //.on("mouseover", mapMouseOver)
-                                    //.on("mouseout", mapMouseOut)//rework so it shows maybe correct colors, and working click functionalitey
-                                    .enter();
-                                    //Probably needs it's own functions to work correctly...
-
-                                    //TODO on mouse over the platoon path should be shown. needs data structure. at least go through platoonlog to loog into future. However the speed is done runtime.... hmmm think about it
-
-                            }
-                            if (section.plan.merge_distance == 0){
-                                if(platoonClass == "leader"){
-
-                                    currentNumberOfPlatooningTrucks +=2;
+                    if(typeof(truck.platooningLog) != 'undefined'){
+                        var isPlatooning = false;
+                        
+                        for(var sectionIndex in truck.platooningLog){
+                            var section = truck.platooningLog[sectionIndex];
+                            //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
+                            if(time < section.end_time && time >= section.start_time){
+                                //console.log(section);
+                                isPlatooning = true;
+                                var platoonClass ="follower";
+                                var leader = section.addedBy;
+                                if(section.addedBy == "self"){
+                                    platoonClass = "leader";
+                                }
+                                if (section.plan.merge_distance != 0){
+                                    currentNumberOfMergingTrucks += 1;
                                     container.append("circle")
-                                        .attr("r", 8)
-                                        .attr("class", "merged " + platoonClass)
+                                        .attr("r", 5)
+                                        .attr("class", "truckCircle merging c"+truck.id+" t"+truck.id+" " + platoonClass)
+                                        .attr("id", "c"+truck.id)
                                         .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
-                                        //.on("mouseover", mapMouseOver)
-                                        //.on("mouseout", mapMouseOut)
-                                        .enter(); 
+                                        .on("mouseover", mapMouseOver)
+                                        .on("mouseout", mapMouseOut)//rework so it shows maybe correct colors, and working click functionalitey
+                                        .on("click", mapMouseClick)
+                                        .enter();
+                                        //Probably needs it's own functions to work correctly...
+
+                                        //TODO on mouse over the platoon path should be shown. needs data structure. at least go through platoonlog to loog into future. However the speed is done runtime.... hmmm think about it
+
+                                }
+                                if (section.plan.merge_distance == 0){
+                                    if(platoonClass == "leader"){
+
+                                        currentNumberOfPlatooningTrucks +=2;
+                                        container.append("circle")
+                                            .attr("r", 8)
+                                            .attr("class", "truckCircle merged c"+truck.id+" t"+truck.id+" " + platoonClass)
+                                            .attr("id", "c"+truck.id)
+                                            .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
+                                            .on("mouseover", mapMouseOver)
+                                            .on("mouseout", mapMouseOut)
+                                            .on("click", mapMouseClick)
+                                            .enter(); 
+                                    }
                                 }
                             }
+                            
                         }
-                        else{
+                        if(isPlatooning == false){
+
                             container.append("circle")
                             .attr("r", 5)
-                            .attr("class", "highlightCircle")
+                            .attr("class", "truckCircle highlightCircle c"+truck.id+" t" +truck.id)
+                            .attr("id", "c"+truck.id)
                             //.attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
                             .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
+                            .on("mouseover", mapMouseOver)
+                            .on("mouseout", mapMouseOut)
+                            .on("click", mapMouseClick)
                             .enter();
                         }
+                    
                     }
-                }
-                else{
-                    container.append("circle")
-                            .attr("r", 5)
-                            .attr("class", "highlightCircle")
-                            //.attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
-                            .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
-                            .enter();
+                    else{
+                        container.append("circle")
+                                .attr("r", 5)
+                                .attr("class", "truckCircle highlightCircle c"+truck.id+" t"+truck.id)
+                                .attr("id", "c"+truck.id)
+                                //.attr("transform", "translate(" + x3(locationAtScrub.long) + "," + y3(locationAtScrub.lat) + ")")
+                                .attr("transform", "translate(" + x3(interpolatedLong) + "," + y3(interpolatedLat) + ")")
+                                .on("mouseover", mapMouseOver)
+                                .on("mouseout", mapMouseOut)
+                                .on("click", mapMouseClick)
+                                .enter();
+                    }
                 }
             }   
         } 
@@ -688,61 +553,75 @@ function updateMap(){
     // does not show correct speeds, but is simpler and faster, could be reowrked later for correct view.
 
     //console.log(truckDataAtTimeStep.length);
+
+    var colorIndex =3;
     for(var truckIndex in truckDataAtTimeStep){
         var truck = truckDataAtTimeStep[truckIndex];
-        //Offload this into the platooning calc function and save it the truckobject
-        if(currentSelectedTrucks.includes("t"+(truck.id).toString()) || typeof(partners[truck.id]) != 'undefined' || currentSelectedTrucks.length == 0){
-            if(typeof(truck.platooningLog)!= 'undefined'){
-                for(var sectionIndex in truck.platooningLog){
-                    var section = truck.platooningLog[sectionIndex];
-                    var route = truck.route.slice(section.start_path_index[0], section.end_path_index[0]);
-                    //console.log(route);
-                    if(section.plan.merge_distance != 0){
-                        paths.append("path")
-                            .attr("class", "merge-line")
-                            .attr("d", pathline(route));
-                    }else{
-                        paths.append("path")
-                            .attr("class", "platoon-line")
-                            .attr("d", pathline(route));
+        var includedInBrush = false;
+        for(var index in brushedTrucks){
+            if(truck.id == brushedTrucks[index].id){
+                includedInBrush = true;
+                break;
+            }
+        }
+        if(includedInBrush == true){
+            //Offload this into the platooning calc function and save it the truckobject
+            if(currentSelectedTrucks.includes("t"+(truck.id).toString()) || typeof(partners[truck.id]) != 'undefined' || currentSelectedTrucks.length == 0){
+                if(typeof(truck.platooningLog)!= 'undefined'){
+                    for(var sectionIndex in truck.platooningLog){
+                        var section = truck.platooningLog[sectionIndex];
+                        var route = truck.route.slice(section.start_path_index[0], section.end_path_index[0]);
+                        //console.log(route);
+                        if(section.plan.merge_distance != 0){
+                            paths.append("path")
+                                .attr("class", "merge-line")
+                                .attr("d", pathline(route));
+                        }else{
+                            paths.append("path")
+                                .attr("class", "platoon-line")
+                                .attr("d", pathline(route));
+                        }
                     }
                 }
             }
-        }
-        if(currentSelectedTrucks.includes("t"+(truck.id).toString())){
-            paths.append("path")
-                .attr("class", "line truckRoute")
-                .attr("id", "t" + truck.id)
-                .style("stroke","skyblue")
-                .style("stroke-width","8")
-                .attr("d", pathline(truck.route))
-                .on("mouseover", mapMouseOver)
-                .on("mouseout", mapMouseOut)
-                .on("click", mapMouseClick);
-        }else if(typeof(partners[truck.id]) != 'undefined'){
-            paths.append("path")
-                .attr("class", "line truckRoute")
-                .attr("id", "t" + truck.id)
-                .style("stroke","pink")
-                .style("stroke-width","8")
-                .attr("d", pathline(truck.route))
-                .on("mouseover", mapMouseOver)
-                .on("mouseout", mapMouseOut)
-                .on("click", mapMouseClick);
+            
 
-        }else{
+            if(currentSelectedTrucks.includes("t"+(truck.id).toString())){
+                paths.append("path")
+                    .attr("class", "line truckRoute t"+truck.id)
+                    .attr("id", "t" + truck.id)
+                    //.style("stroke","skyblue")
+                    .style("stroke",colorScale(0))
+                    .style("stroke-width","8")
+                    .attr("d", pathline(truck.route))
+                    .on("mouseover", mapMouseOver)
+                    .on("mouseout", mapMouseOut)
+                    .on("click", mapMouseClick);
+            }else if(typeof(partners[truck.id]) != 'undefined'){
+                
+                paths.append("path")
+                    .attr("class", "line truckRoute t"+truck.id)
+                    .attr("id", "t" + truck.id)
+                    //.style("stroke","pink")
+                    .style("stroke",colorScale(colorIndex))
+                    .style("stroke-width","8")
+                    .attr("d", pathline(truck.route))
+                    .on("mouseover", mapMouseOver)
+                    .on("mouseout", mapMouseOut)
+                    .on("click", mapMouseClick);
+                colorIndex ++;
 
-            paths.append("path")
-                .attr("class", "line truckRoute")
-                .attr("id", "t" + truck.id)
-                .attr("d", pathline(truck.route))
-                .on("mouseover", mapMouseOver)
-                .on("mouseout", mapMouseOut)
-                .on("click", mapMouseClick);
-                //.style("stroke", "rgba(50,50,50, "+ 1/(0.1 *brushedTrucksLength)+")")
-        }
-        if(truck.id == 743){
-            console.log(truck);
+            }else{
+
+                paths.append("path")
+                    .attr("class", "line truckRoute t"+truck.id)
+                    .attr("id", "t" + truck.id)
+                    .attr("d", pathline(truck.route))
+                    .on("mouseover", mapMouseOver)
+                    .on("mouseout", mapMouseOut)
+                    .on("click", mapMouseClick);
+                    //.style("stroke", "rgba(50,50,50, "+ 1/(0.1 *brushedTrucksLength)+")")
+            }
         }
     
     };
@@ -759,49 +638,114 @@ function updateMap(){
     var label = mapView.append("g");
     label.append("text")
                 .attr("x", - 20)
-                .attr("y", 20)
+                .attr("y", 0)
                 .attr("class", "text-label-truck-id")
                 .style("fill", "dimgrey");
 
     function mapMouseOver(){
-        currentMouseOverTruck = d3.select(this)._groups[0][0].id.toString();
-        //console.log(d3.select(this)._groups[0][0].id);
-        label.select("text").text("Id: "+currentMouseOverTruck);
-        d3.select(this)
-            .transition()
-            .duration(100)
-            .style("stroke","royalblue")
-            .style("stroke-width","10")
-            .style("z-index", "10");
-        
+        if(d3.select(this)._groups[0][0].id.toString().split('c').length == 2){
+            //Catches mouse input to circles
+            //console.log(d3.select(this)._groups[0][0].id);
+            currentMouseOverCircle = d3.select(this)._groups[0][0].id;
+            currentMouseOverTruck = "t"+d3.select(this)._groups[0][0].id.toString().split('c')[1];
+            var pathClass = "." + currentMouseOverTruck;
+            var circleClass = "." + currentMouseOverCircle;
+            d3.selectAll(pathClass).filter(".truckRoute").classed("mouseOvered", true);
+            d3.select(this).classed("mouseOveredCircle", true);
+            //d3.selectAll(".truckCircle").filter(pathClass).classed("hidden", true);
+            /*d3.selectAll(".truckCircle").filter(function(d){console.log(d);return }).classed("hidden", true);
+            
+            //d3.selectAll(circleClass).classed("hidden", false);*/
+        }else{
+            currentMouseOverTruck = d3.select(this)._groups[0][0].id.toString();
+
+            d3.select(this).classed("mouseOvered", true);
+            var currentMouseOverCircleId = "#c"+d3.select(this)._groups[0][0].id.toString().split('t')[1];
+            d3.select(currentMouseOverCircleId).classed("mouseOveredCircle", true);
+            
+        }
+        var thisTruck = truckIdDict[currentMouseOverTruck];
+        var travelTime = thisTruck.travel_time;
+        if(typeof(thisTruck.platooningLog) != 'undefined'){
+            var mergePercent = parseInt((thisTruck.merge_time/travelTime)*100);
+            var platoonPercent = parseInt((thisTruck.platoon_time/travelTime)*100); 
+            label.select("text").text("Id: "+currentMouseOverTruck +
+                ", Travel Time: " + parseInt(travelTime)+
+                ", Trip length: "+parseInt(eval(thisTruck.travel_distance/1000))+
+                "km, Merge: " + parseFloat(thisTruck.merge_rate).toFixed(2)+
+                ", Platoon: " + parseFloat(thisTruck.platoon_rate).toFixed(2)+
+                ", Num platooning partners: "+ thisTruck.num_of_partners);
+            
+        }else{
+            label.select("text").text("Id: "+currentMouseOverTruck +
+                ", Travel Time: " + parseInt(travelTime)+
+                ", Trip length: "+parseInt(eval(thisTruck.travel_distance/1000))+
+                "km, No platooning.");
+        }
+
+
         if(typeof(truckIdDict[currentMouseOverTruck].platoonedWith) != 'undefined'){
             for(var relatedTruckIndex in truckIdDict[currentMouseOverTruck].platoonedWith){                
-                var id = "#t" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
+                //var id = "#t" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
+                var relatedClass = ".t" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
                 
-                d3.select(id)
-                    .transition()
-                    .duration(100)
-                    .style("stroke","red")
-                    .style("stroke-width","8");
+                d3.selectAll(relatedClass).filter(".truckRoute").classed("related-class", true);
+                
+                //show onyl related truck circles
+                
+                var relatedCircleClass = ".c" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
+                d3.selectAll(relatedCircleClass).classed("related-highlight-class", true);
+                console.log(relatedCircleClass);
+                
             }
         }
     }
     function mapMouseOut(){
         var mouseOutTruckId = d3.select(this)._groups[0][0].id.toString();
+        var currentMouseOverCircleId = "#c"+mouseOutTruckId.split('t')[1];
+        if(mouseOutTruckId.split('c').length == 2){
+            currentMouseOverCircleId = "#"+mouseOutTruckId;
+            mouseOutTruckId = "t" + mouseOutTruckId.split('c')[1];
+            d3.select(this).classed("mouseOveredCircle", false);
+            //console.log(currentMouseOverCircleId);
+        }
         if(typeof(truckIdDict[mouseOutTruckId].platoonedWith) != 'undefined'){
                 
             for(var relatedTruckIndex in truckIdDict[mouseOutTruckId].platoonedWith){
                 
-                id = "#t" + truckIdDict[mouseOutTruckId].platoonedWith[relatedTruckIndex].id.toString();
+                /*id = "#t" + truckIdDict[mouseOutTruckId].platoonedWith[relatedTruckIndex].id.toString();
                 d3.select(id)
                     .transition()
                     .duration(100)
                     .style("stroke","rgba(50,50,0, 0.05)")
-                    .style("stroke-width","4");
+                    .style("stroke-width","4");*/
+                var relatedClass = ".t" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
+                d3.selectAll(relatedClass).filter(".truckRoute").classed("related-class", false);
+                var relatedCircleClass = ".c" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
+                d3.selectAll(relatedCircleClass).classed("related-highlight-class", false);
+                /*if(currentMouseOverCircle != -1){
+                    var relatedCircleClass = ".c" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
+                    d3.selectAll(relatedCircleClass).classed("hidden", true);
+                }*/
+                /*d3.selectAll(relatedClass).filter(".truckRoute")
+                    .transition()
+                    .duration(100)
+                    .style("stroke","rgba(50,50,0, 0.05)")
+                    .style("stroke-width","4");*/
             }
         }
         currentMouseOverTruck = -1;
+        var currentClass = "."+ mouseOutTruckId;
         if(currentSelectedTrucks.includes(mouseOutTruckId)){
+            //d3.select(this).classed("mouseOvered", true);
+            d3.selectAll(currentClass).classed("mouseOvered", true);
+        }else{
+            //d3.select(this).classed("mouseOvered", false);
+            d3.selectAll(currentClass).classed("mouseOvered", false);
+        }
+        //console.log(currentMouseOverCircleId);
+        d3.select(currentMouseOverCircleId).classed("mouseOveredCircle", false);
+        /*if(currentSelectedTrucks.includes(mouseOutTruckId)){
             d3.select(this)
                 .transition()
                 .duration(100)
@@ -810,22 +754,33 @@ function updateMap(){
                 .style("z-index", "10");
         }else{
             //currentSelectedTrucks.push(clickedTruckId);
-            d3.select(this)
+            d3.select(this).classed("mouseOvered", false);
+            /*d3.select(this)
                 .transition()
                 .duration(300)
                 .style("stroke","rgba(50,50,0, 0.05)")
                 .style("stroke-width","4");//it is style 
-        }
+        }*/
         
     
     }
     function mapMouseClick(){
         clickedTruckId = d3.select(this)._groups[0][0].id;
-        //console.log(d3.select(this));
-        if(currentSelectedTrucks.includes(clickedTruckId)){
+        if(clickedTruckId.split('c').length == 2){
+            clickedTruckId = "t"+clickedTruckId.split('c')[1];
+        }
+        console.log(clickedTruckId);
+        /*if(currentSelectedTrucks.includes(clickedTruckId)){
             currentSelectedTrucks.splice(currentSelectedTrucks.indexOf(clickedTruckId), 1)
         }else{
             currentSelectedTrucks.push(clickedTruckId);
+        }*/
+        if(currentSelectedTrucks.includes(clickedTruckId)){
+            currentSelectedTrucks = [];
+        }else{
+            currentSelectedTrucks = [];
+            currentSelectedTrucks.push(clickedTruckId);
+            
         }
         calculatePlatoonPartners();
         updatePlatoonPanel();
@@ -967,6 +922,8 @@ function calculatePlatoons(){
     for(var truckIndex in truckData.trucks){
         var truck = truckData.trucks[truckIndex];
         var relativeAdaptation = 0;
+        
+
         truck.total_adaptation = 0;
 
         if(truck.plan_history.length >1){
@@ -991,6 +948,7 @@ function calculatePlatoons(){
                         truck.total_adaptation += adaptation;
                     }
                     else{
+                        
                         truckPlan.plan[0].adaptation = 0;
                         truckPlan.plan[0].relative_adaptation = relativeAdaptation;
                         truckPlan.plan[0].relative_adaptation_start = relativeAdaptation;
@@ -1061,6 +1019,9 @@ function calculatePlatoons(){
     //format in a sensical manner to browse platoons.
     for(var truckIndex in truckData.trucks){
         var truck = truckData.trucks[truckIndex];
+        truck.travel_time =truck.deadline - truck.start_time;
+        var merge_time = 0;
+        var platoon_time = 0;
         if(typeof(truck.platoonedWith) != 'undefined'){
             
             var platooningInstances = [];
@@ -1116,9 +1077,30 @@ function calculatePlatoons(){
                     }
                 }
             }
-            truckData.trucks[truckIndex].platooningLog = platooningInstances;
-            //console.log(truck);
+            for(var index in platooningInstances){
+                if(platooningInstances[index].plan.merge_distance == 0){
+                    platoon_time += platooningInstances[index].end_time - platooningInstances[index].start_time;
+                }else{
+                    merge_time += platooningInstances[index].end_time - platooningInstances[index].start_time;
+                }
+            }
+            
+            truck.platooningLog = platooningInstances;
+            truck.num_of_partners = truck.platoonedWith.length;
+            truck.merge_time = merge_time;
+            truck.platoon_time = platoon_time;
+            truck.merge_rate = merge_time/truck.travel_time;
+            truck.platoon_rate = platoon_time/truck.travel_time;
+            //console.log(truck.travel_distance);
+        }else{
+            truck.num_of_partners = 0;
+            truck.merge_time = 0;
+            truck.platoon_time = 0;
+            truck.merge_rate = 0;
+            truck.platoon_rate = 0;
         }
+        truck.travel_distance = d3.sum(truck.path_weights);
+        truck.num_of_plans = truck.plan_history.length;
     }
     
 
@@ -1173,8 +1155,8 @@ function updatePlatoonPanel(){
     var xAxis4 = d3.axisBottom(x4),
     yAxis4 = d3.axisLeft(y4);
     
-    
-
+    //TODO Insert grid lines to enable measuring
+    //TODO tooltip for mouseover on truck with all calcs on fuel, distance travelled etc...
 
     //console.log(x4.domain());    
     var counter = 1;
@@ -1189,6 +1171,10 @@ function updatePlatoonPanel(){
 
     var adaptationLine = d3.line()
         .x(function(d) { return x4(d.time); })
+        .y(function(d) { return y4(d.adaptation); });
+
+    var gridLine = d3.line()
+        .x(function(d) { return x4(); })
         .y(function(d) { return y4(d.adaptation); });
 
     var z = d3.scaleLinear()
@@ -1282,73 +1268,194 @@ function updatePlatoonPanel(){
     }
     //y4.domain([-minDomainAdapt -1000, -maxDomainAdapt +1000]);
 
-    /*
-    for(var truckIndex in fullTruckData){
-        var truck = fullTruckData[truckIndex];
-        trip.append("g")
-            .selectAll(".truckTrip")
-            .data([truck])
-            .enter()
-                .append("rect")
-                .attr("class", "truckTrip")
-                .attr("x", function(d,i){
-                    return x4(d.start_time)
-                })
-                .attr("y", eval(counter*yHeight))
-                .attr("height", 20)
-                .attr("width", function(d){
-                    return eval(x4(d.deadline) - x4(d.start_time));
-                })
-                .enter();
+}
 
-        //inserts orange or green rects for platoon plans depending on the merge distance.
-        //TODO Rework to adjust for the incoming trucks adaptation in y, draw dashed horizontal line at y.
-        if(typeof(truck.platooningLog) != 'undefined'){
-            //console.log("has log");
-            for(var sectionIndex in truck.platooningLog){
-                var section = truck.platooningLog[sectionIndex];
-                //if(truck.start_time + total_time*progress <= section.end_time && truck.start_time + total_time*progress >= section.start_time){
-                if(section.plan.merge_distance == 0){
+function updateParcoords(){
+    d3.select("#parCoordsPanel").html("");
+    var margin = {top: 40, right: 10, bottom: 10, left: 10},
+    width = 600 - margin.left - margin.right,
+    height = 200 - margin.top - margin.bottom;
 
-                    trip.append("g")
-                        .selectAll(".platoonRect")
-                        .data([section])
-                        .enter()
-                            .append("rect")
-                            .attr("class", "platoonRect")
-                            .attr("x", function(d,i){
-                                return x4(d.start_time)
-                            })
-                            .attr("y", eval(counter*yHeight))
-                            .attr("height", 20)
-                            .attr("width", function(d){
-                                return eval(x4(d.end_time) - x4(d.start_time));
-                            })
-                            .enter();
+    var selected = [];
+    console.log("parcoords");
+    var x = d3.scaleBand().rangeRound([0, width]).padding(1),
+        y = {},
+        dragging = {};
 
-                }else{
-                    trip.append("g")
-                        .selectAll(".mergeRect")
-                        .data([section])
-                        .enter()
-                            .append("rect")
-                            .attr("class", "mergeRect")
-                            .attr("x", function(d,i){
-                                return x4(d.start_time)
-                            })
-                            .attr("y", eval(counter*yHeight))
-                            .attr("height", 20)
-                            .attr("width", function(d){
-                                return eval(x4(d.end_time) - x4(d.start_time)-2);
-                            })
-                            .enter();
-                }
+
+    var line = d3.line(),
+        //axis = d3.axisLeft(x),
+        background,
+        foreground,
+        extents;
+
+    var svg = d3.select("#parCoordsPanel").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var quant_p = function(v){return (parseFloat(v) == v) || (v == "")};     
+
+    /*d3.csv("brushedTrucks.csv", function(error, cars) 
+      // Extract the list of dimensions and create a scale for each.
+        //cars[0] contains the header elements, then for all elements in the header
+        //different than "name" it creates and y axis in a dictionary by variable name
+        console.log("ok");
+        dimensions = d3.keys(cars[0]);
+        x.domain(dimensions);
+
+    */
+    dimensions = ["travel_time",
+                    "travel_distance",
+                    "num_of_partners",
+                    "merge_rate",
+                    "platoon_rate",
+                    "merge_time",
+                    "platoon_time",
+                    "total_adaptation",
+                    "num_of_plans"
+                    ];
+    x.domain(dimensions)
+    //console.log(brushedTrucks[0]);
+
+
+    dimensions.forEach(function(d) {
+        var vals = brushedTrucks.map(function(p) {return p[d];}); 
+        if (vals.every(quant_p)){ 
+            y[d] = d3.scaleLinear()
+            .domain(d3.extent(brushedTrucks, function(p) { 
+                return +p[d]; }))
+            .range([height, 0])
+        }
+        else{           
+        y[d] = d3.scalePoint()
+            .domain(vals.filter(function(v, i) {return vals.indexOf(v) == i;}))
+            .range([height, 0],1);}
+  })
+
+  extents = dimensions.map(function(p) { return [0,0]; });
+
+  // Add grey background lines for context.
+  background = svg.append("g")
+      .attr("class", "background")
+    .selectAll("path")
+      .data(brushedTrucks)
+    .enter().append("path")
+      .attr("d", path);
+
+  // Add blue foreground lines for focus.
+  foreground = svg.append("g")
+      .attr("class", "foreground")
+    .selectAll("path")
+      .data(brushedTrucks)
+    .enter().append("path")
+      .attr("d", path);
+
+  // Add a group element for each dimension.
+  var g = svg.selectAll(".dimension")
+      .data(dimensions)
+    .enter().append("g")
+      .attr("class", "dimension")
+      .attr("transform", function(d) {  return "translate(" + x(d) + ")"; })
+      .call(d3.drag()
+        .subject(function(d) { return {x: x(d)}; })
+        .on("start", function(d) {
+          dragging[d] = x(d);
+          background.attr("visibility", "hidden");
+        })
+        .on("drag", function(d) {
+          dragging[d] = Math.min(width, Math.max(0, d3.event.x));
+          foreground.attr("d", path);
+          dimensions.sort(function(a, b) { return position(a) - position(b); });
+          x.domain(dimensions);
+          g.attr("transform", function(d) { return "translate(" + position(d) + ")"; })
+        })
+        .on("end", function(d) {
+        delete dragging[d];
+        transition(d3.select(this)).attr("transform", "translate(" + x(d) + ")");
+        transition(foreground).attr("d", path);
+        background
+                .attr("d", path)
+            .transition()
+                .delay(500)
+                .duration(0)
+                .attr("visibility", null);
+
+        }));
+  // Add an axis and title.
+  g.append("g")
+      .attr("class", "axis")
+      .each(function(d) {  d3.select(this).call(d3.axisLeft(y[d]));})
+      //text does not show up because previous line breaks somehow
+    .append("text")
+      .attr("fill", "black")
+      .attr("transform", "rotate(-10)")
+      .style("text-anchor", "middle")
+      .attr("y", -9) 
+      .text(function(d) { return d; });
+
+  // Add and store a brush for each axis.
+  g.append("g")
+      .attr("class", "brush")
+      .each(function(d) {
+        d3.select(this).call(y[d].brush = d3.brushY().extent([[-8, 0], [8,height]]).on("brush start", brushstart).on("brush", brush_parallel_chart));
+      })
+    .selectAll("rect")
+      .attr("x", -8)
+      .attr("width", 16);
+    
+
+    function position(d) {
+      var v = dragging[d];
+      return v == null ? x(d) : v;
+    }
+
+    function transition(g) {
+      return g.transition().duration(500);
+    }
+
+    // Returns the path for a given data point.
+    function path(d) {
+      return line(dimensions.map(function(p) { return [position(p), y[p](d[p])]; }));
+    }
+
+    function brushstart() {
+      d3.event.sourceEvent.stopPropagation();
+    }
+
+     
+    // Handles a brush event, toggling the display of foreground lines.
+    function brush_parallel_chart() {    
+        for(var i=0;i<dimensions.length;++i){
+            if(d3.event.target==y[dimensions[i]].brush) {
+                extents[i]=d3.event.selection.map(y[dimensions[i]].invert,y[dimensions[i]]);
+
             }
         }
-        counter ++;
+        //console.log(extents);
+        foreground.style("display", function(d) {
+            return dimensions.every(function(p, i) {
+                if(extents[i][0]==0 && extents[i][0]==0) {
+                    return true;
+                }
+                if(extents[i][1] <= d[p] && d[p] <= extents[i][0]){
+                    //console.log(d);
+                    selected.push(d);
+
+                }
+                return extents[i][1] <= d[p] && d[p] <= extents[i][0];
+            }) ? null : "none";
+        });
+        brushedTrucks = selected;
+        //console.log("end");
+        updateMap();
+        //drawTimeline();
+        selected = [];
     }
-    */
-}
+    
+};
+
 
 function updateParameterDisplay(){
     var parameters = d3.select("#parameterDisplay");
@@ -1356,7 +1463,7 @@ function updateParameterDisplay(){
 
         var div = parameters.append("div")
             .attr('pointer-events', 'none')
-            .attr("class", "parameters-details label")
+            .attr("class", "parameters-details label text-label")
             .html("<p>Number of trucks: "+truckData.simulation_parameters.number_of_trucks +
                 ", Recalculation interval: " + truckData.simulation_parameters.recalculation_interval +
                 ", File name: "+ truckData.simulation_parameters.name +
@@ -1427,7 +1534,7 @@ function zoomed() {
     //console.log(x.domain());
 
     brushedTrucks = getBrushedTrucks();
-    //updateVis();
+    updateVis();
 
 
 }
@@ -1435,6 +1542,7 @@ function updateVis(){
     //updateList();
     updatePlatoonPanel();
     updateMap();
+    updateParcoords();
 }
 
 function calculatePlatoonPartners() {

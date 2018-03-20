@@ -1,35 +1,30 @@
-body { font: 12px Arial;
-    background-color:white;}
-
-path { 
-    stroke: rgba(50,50,50, 0.3);
-    stroke-width: 2;
-    fill: none;
+body{
+    font-family: Arial,Helvetica Neue,Helvetica,sans-serif; 
+    font size: 0.7em;
 }
-.map{
-    stroke: rgba(50,50,50, 0.2);
-    stroke-width: 2;
-    fill: rgba(120,120,120, 0.2);   
+.area {
+  clip-path: url(#clip);
 }
-#map-div{
-    display:inline-block;
-    border: 1px solid blue;
-    top:10px;
-    left:10px;
-     
+.area-grey{
+    fill: darkgrey;
 }
 
-#platoons{
-    display:inline-block;
-    border: 1px solid red;
-    top:10px;
+.area-merging{
+    fill: orange;
+    
 }
-.bar{
-    fill: blue;
-    stroke: grey;
-    stroke-width: 1;
-    shape-rendering: crispEdges;
+
+.area-platooning{
+    fill: green;
+    
 }
+
+.zoom {
+  cursor: move;
+  fill: none;
+  pointer-events: all;
+}
+
 .axis path,
 .axis line {
     fill: none;
@@ -38,15 +33,202 @@ path {
     shape-rendering: crispEdges;
 }
 
-div.tooltip {
-  position: absolute;
-  text-align: left;
-  padding: 2px;
-  font: 12px sans-serif;
-  background: lightsteelblue;
-  border: 0px;
-  border-radius: 8px;
-  pointer-events: none;
-  z-index:10;
+path { 
+    stroke: rgba(50,50,50, 0.1);
+    stroke-width: 4;
+    fill: none;
+    pointer-events: visibleStroke;
+}
 
+.platoon-line{
+    fill:none;
+    stroke:rgba(0,180,0,0.1);
+    stroke-width: 15px;
+}
+.merge-line{
+    fill:none;
+    stroke:rgba(255,165,0,0.07);
+    stroke-width: 12px;
+}
+
+#firstPanel{
+    height:700px;
+    padding-bottom: 5px;
+    
+}
+#secondPanel{
+    width:1460px;
+    border:1px solid silver;
+}
+
+.mapOutline{
+    /*stroke: rgba(50,50,50, 0.2);*/
+    stroke:silver;
+    stroke-width: 2;
+    fill:none;
+    /*fill: rgba(120,120,120, 0.05);   */
+}
+#map{
+    display: block;
+    float:left;
+    top:10px;
+    left:10px;
+    height:700px;
+    width:700px;
+    border:1px solid silver;
+     
+}
+#platoonPanel{
+    display: block;
+    float:left;
+    top:10px;
+    left:10px;
+    margin-left: 5px;
+    height:700px;
+    width:750px;
+    border:1px solid silver;
+    overflow: hidden;
+     
+}
+#platoonPanelContent{
+
+    height:100%;
+    width:100%;
+}
+#parCoordsPanel{
+    display: inline-block;
+    height:100%;
+}
+
+.truckTrip{
+    fill:darkgrey;
+    
+}
+.platoonRect{
+    fill:green;
+
+}
+.mergeRect{
+    fill:orange;
+
+}
+
+.hover-line{
+    stroke-width:2px;
+    stroke: steelblue;
+    stroke-dasharray: 5
+
+}
+.hover-locked{
+    stroke-width:5px;
+    stroke: green;
+}
+
+.highlightCircle{
+    stroke:darkslategrey;
+    fill:none;
+    stroke-width: 2px;
+}
+
+#text-label{
+    color: red;
+    font-size: 0.8em;
+}
+
+.text-label-truck-id, .text-label{
+    font-size: 0.8em;
+}
+
+.leader{
+    stroke:green;
+    stroke-width:2px;
+}
+.follower{
+    stroke:orange;
+    stroke-width:1px;
+}
+
+.merging{
+    fill:orange;
+}
+.merged{
+    fill:green;
+}
+
+#parameterDisplay{
+    color: darkgrey;
+    height:20px;
+    width:1200px;
+}
+
+.adaptation-line{
+    stroke: darkgrey;
+    stroke-width: 4;
+    fill: none;
+    pointer-events: visibleStroke;
+}
+.adaptation-platooning{
+    stroke:green;
+    stroke-width: 10px;
+}
+.speed-up{
+    stroke: red;
+}
+.slow-down{
+    stroke: green;
+}
+.related-class{
+    stroke:red;
+    stroke-width:8;
+}
+.mouseOvered{
+    stroke: royalblue;
+    stroke-width: 10;
+    z-index: 10;
+}
+
+.mouseOveredCircle{
+    stroke-width:20;
+}
+.hidden{
+    display:none;
+}
+.related-highlight-class{
+    stroke-width: 20;
+}
+
+
+
+.background path {
+  fill: none;
+  stroke: #ddd;
+  stroke-width:1px;
+  stroke-opacity: .1;  
+  shape-rendering: crispEdges;
+}
+
+.foreground path {
+  fill: none;
+  stroke-width:1px;
+  stroke: rgba(100,100,100,0.5);
+   stroke-opacity: .7;
+}
+
+.brush .extent {
+  fill-opacity: .3;
+  stroke: #fff;
+
+  shape-rendering: crispEdges;
+}
+
+.axis line,
+.axis path {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+  cursor: move;
 }
