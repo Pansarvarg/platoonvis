@@ -46,6 +46,8 @@ var defaultPlanPlatooningTrucks = [];
 var truckIdDict = {};
 var partners = {}; 
 var dimensions =[];
+var antiLagger = 0;
+var timeOutToggle =0;
 
 
 var svg = d3.select("svg"),
@@ -137,7 +139,7 @@ var context = svg.append("g")
 
 //d3.json("/data/outputTruncatedRoutes2.json", function(error, data1) {
 //d3.json("/data/output1000.json", function(error, data1) {
-d3.json("./data/output1000.json", function(error, data1) {
+d3.json("./data/output1000-2.json", function(error, data1) {
     if (error) throw error;
     
     // Load the map of sweden and draw it 
@@ -636,11 +638,11 @@ function updateMap(){
     }
 
     var label = mapView.append("g");
-    label.append("text")
+    /*label.append("text")
                 .attr("x", - 20)
                 .attr("y", 0)
                 .attr("class", "text-label-truck-id")
-                .style("fill", "dimgrey");
+                .style("fill", "dimgrey");*()
 
     function mapMouseOver(){
         if(d3.select(this)._groups[0][0].id.toString().split('c').length == 2){
@@ -670,11 +672,13 @@ function updateMap(){
             var mergePercent = parseInt((thisTruck.merge_time/travelTime)*100);
             var platoonPercent = parseInt((thisTruck.platoon_time/travelTime)*100); 
             label.select("text").text("Id: "+currentMouseOverTruck +
-                ", Travel Time: " + parseInt(travelTime)+
+                ",  </br> Travel Time: " + parseInt(travelTime)+
                 ", Trip length: "+parseInt(eval(thisTruck.travel_distance/1000))+
                 "km, Merge: " + parseFloat(thisTruck.merge_rate).toFixed(2)+
                 ", Platoon: " + parseFloat(thisTruck.platoon_rate).toFixed(2)+
                 ", Num platooning partners: "+ thisTruck.num_of_partners);
+            label.attr("transform", "translate("+ eval(d3.mouse(this)[0] + 40) +"," + d3.mouse(this)[1] + ")");
+
             
         }else{
             label.select("text").text("Id: "+currentMouseOverTruck +
@@ -695,7 +699,7 @@ function updateMap(){
                 
                 var relatedCircleClass = ".c" + truckIdDict[currentMouseOverTruck].platoonedWith[relatedTruckIndex].id.toString();
                 d3.selectAll(relatedCircleClass).classed("related-highlight-class", true);
-                console.log(relatedCircleClass);
+                //console.log(relatedCircleClass);
                 
             }
         }
@@ -1537,12 +1541,29 @@ function zoomed() {
 
 
 }
+
+//Waits for a small amount of time between updates to give a better flow of the interface.
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function startTimer() {
+    console.log("this might take some time....");
+    await delay(500);
+    console.log("done!");
+    timeOutToggle = 0;
+}
+
 function updateVis(){
     //updateList();
-    updatePlatoonPanel();
-    updateMap();
-    updateParcoords();
+    if(timeOutToggle == 0){
+        updateMap();
+        updatePlatoonPanel();
+        updateParcoords();
+
+        timeOutToggle = 1;
+        startTimer();
+    };
 }
+
 
 function calculatePlatoonPartners() {
     partners = {};
